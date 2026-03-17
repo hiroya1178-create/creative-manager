@@ -92,7 +92,7 @@ function extractFieldsFromText(text){
 
 function SideNav({ currentPage, setCurrentPage }){
   const items = [["dashboard","ダッシュボード"],["orders","受注管理"],["staff","スタッフ管理"],["templates","テンプレート管理"],["calendar","日程カレンダー"],["outsource","外注管理"]];
-  return `<aside class="sidebar"><div class="brand">デザインマネージャー</div><div class="brand-sub">クリエイティブ管理</div><div class="nav">${items.map(([k,l])=>`<button class="${currentPage===k?'active':''}" onclick="setPage('${k}')">${l}</button>`).join("")}</div><div class="version">デザインマネージャー 公開版 v2.5</div></aside>`;
+  return `<aside class="sidebar"><div class="brand">デザインマネージャー</div><div class="brand-sub">クリエイティブ管理</div><div class="nav">${items.map(([k,l])=>`<button class="${currentPage===k?'active':''}" onclick="setPage('${k}')">${l}</button>`).join("")}</div><div class="version">デザインマネージャー 公開版 v2.4</div></aside>`;
 }
 
 const state = {
@@ -155,9 +155,38 @@ function renderDashboard(){
   const monthlyOrders = state.orders.filter((o) => String(o.finishDate || "").startsWith(currentMonth));
   const monthlyCount = monthlyOrders.length;
   const monthlyAmount = monthlyOrders.reduce((sum, o) => sum + Number(o.amount || 0), 0);
-  const nearDueOrders = [...state.orders].filter((o) => o.status !== "納品受信").sort((a,b)=>String(a.finishDate||"9999-99-99").localeCompare(String(b.finishDate||"9999-99-99"))).slice(0,5);
+  const nearDueOrders = [...state.orders]
+    .filter((o) => o.status !== "納品受信")
+    .sort((a,b)=>String(a.finishDate||"9999-99-99").localeCompare(String(b.finishDate||"9999-99-99")))
+    .slice(0,5);
   const outsourceCount = state.orders.filter((o) => o.judge === "外注推奨" || o.outsourceStatus).length;
   const staffSummary = state.staff.map((m) => ({ name:m.name, count: state.orders.filter((o)=>o.assignee===m.name).length }));
+  const statusTotal = Math.max(state.orders.length, 1);
+  const okCount = state.orders.filter((o) => o.status === "納期OK").length;
+  const weekDanger = state.orders.filter((o) => o.status !== "納品受信" && (o.finishDate || "") <= "2026-03-21").length;
+  const weekWarn = state.orders.filter((o) => o.status !== "納品受信" && (o.finishDate || "") > "2026-03-21" && (o.finishDate || "") <= "2026-03-25").length;
+  const weekSafe = state.orders.filter((o) => o.status !== "納品受信" && (o.finishDate || "") > "2026-03-25").length;
+
+  const barRow = (label, value, max, cls="") => `
+    <div class="bar-row">
+      <div class="bar-head"><span>${label}</span><strong>${value}</strong></div>
+      <div class="bar-track"><div class="bar-fill ${cls}" style="width:${Math.min(max ? (value / max) * 100 : 0, 100)}%"></div></div>
+    </div>`;
+
+  const moneyBars = (() => {
+    const months = [
+      { label: "1月", amount: Math.round(totalAmount * 0.42) },
+      { label: "2月", amount: Math.round(totalAmount * 0.61) },
+      { label: "3月", amount: monthlyAmount || Math.round(totalAmount * 0.64) },
+    ];
+    const maxAmount = Math.max(...months.map(m => m.amount), 1);
+    return months.map(m => `
+      <div class="bar-row">
+        <div class="bar-head"><span>${m.label}</span><strong>${formatYen(m.amount)}</strong></div>
+        <div class="bar-track"><div class="bar-fill info" style="width:${(m.amount / maxAmount) * 100}%"></div></div>
+      </div>`).join("");
+  })();
+
   return `
   <div class="page-head"><div><div class="page-title">ダッシュボード</div><div class="page-sub">案件の概要と進捗状況</div></div><div class="card" style="padding:14px 18px;font-weight:700;color:#6d3df5;">チャッピー株式会社</div></div>
   <div class="stat-grid">
@@ -178,9 +207,30 @@ function renderDashboard(){
     <div class="card"><div style="font-weight:700;margin-bottom:14px">最近の受注</div>${recentOrders.map(o=>`<div class="list-item"><div style="display:flex;justify-content:space-between;gap:12px;align-items:flex-start;flex-wrap:wrap"><div><div style="font-weight:700">${esc(o.client)} / ${esc(o.projectName)}</div><div class="help" style="margin-top:6px">担当: ${esc(o.assignee)} ・ 納期: ${esc(o.finishDate||"未設定")}</div></div><div class="badges"><span class="badge ${statusClass(o.status)}">${esc(o.status)}</span><span class="badge ${judgeClass(o.judge)}">${esc(o.judge)}</span></div></div></div>`).join("")}</div>
     <div class="card"><div style="font-weight:700;margin-bottom:14px">納期が近い案件</div>${nearDueOrders.length===0?`<div class="help">対象案件はありません。</div>`:nearDueOrders.map(o=>`<div class="list-item"><div style="font-weight:700">${esc(o.projectName)}</div><div class="help" style="margin-top:6px">${esc(o.client)} / ${esc(o.finishDate||"未設定")}</div></div>`).join("")}</div>
     <div class="card"><div style="font-weight:700;margin-bottom:14px">担当者別件数</div>${staffSummary.map(s=>`<div class="list-item" style="display:flex;justify-content:space-between;align-items:center"><div style="font-weight:700">${esc(s.name)}</div><div>${s.count}件</div></div>`).join("")}</div>
+  </div>
+  <div class="grid-3" style="margin-top:16px">
+    <div class="bar-card">
+      <div class="bar-title">今週の納期バー</div>
+      ${barRow("今日〜3日以内", weekDanger, Math.max(activeCount, 1), "danger")}
+      ${barRow("4〜7日以内", weekWarn, Math.max(activeCount, 1), "warn")}
+      ${barRow("8日以降", weekSafe, Math.max(activeCount, 1), "ok")}
+      <div class="compact-note">未完了案件を納期の近さで可視化しています。</div>
+    </div>
+    <div class="bar-card">
+      <div class="bar-title">月別売上バー</div>
+      ${moneyBars}
+      <div class="compact-note">発表用デモとして月別イメージを表示しています。</div>
+    </div>
+    <div class="bar-card">
+      <div class="bar-title">案件ステータス比率バー</div>
+      ${barRow("納期OK", okCount, statusTotal, "ok")}
+      ${barRow("納期NG", ngCount, statusTotal, "danger")}
+      ${barRow("納品受信", receivedCount, statusTotal, "info")}
+      <div class="compact-note">案件全体の状態をひと目で把握できます。</div>
+    </div>
   </div>`;
 }
-function statCard(title, value, sub){ return `<div class="card stat-polish"><div class="stat-label" style="font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase">${title}</div><div class="stat-value" style="font-size:38px;font-weight:800;letter-spacing:-.03em">${esc(value)}</div><div class="stat-sub" style="margin-top:10px">${esc(sub)}</div></div>`; }
+function statCard(title, value, sub){ return `<div class="card"><div class="stat-label">${title}</div><div class="stat-value">${esc(value)}</div><div class="stat-sub">${esc(sub)}</div></div>`; }
 
 function filteredOrders(){
   let list = state.orders.filter((o) => {
