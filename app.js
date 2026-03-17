@@ -92,7 +92,7 @@ function extractFieldsFromText(text){
 
 function SideNav({ currentPage, setCurrentPage }){
   const items = [["dashboard","ダッシュボード"],["orders","受注管理"],["staff","スタッフ管理"],["templates","テンプレート管理"],["calendar","日程カレンダー"],["outsource","外注管理"]];
-  return `<aside class="sidebar"><div class="brand">デザインマネージャー</div><div class="brand-sub">クリエイティブ管理</div><div class="nav">${items.map(([k,l])=>`<button class="${currentPage===k?'active':''}" onclick="setPage('${k}')">${l}</button>`).join("")}</div><div class="version">デザインマネージャー 公開版 v2.4</div></aside>`;
+  return `<aside class="sidebar"><div class="brand">デザインマネージャー</div><div class="brand-sub">クリエイティブ管理</div><div class="nav">${items.map(([k,l])=>`<button class="${currentPage===k?'active':''}" onclick="setPage('${k}')">${l}</button>`).join("")}</div><div class="version">デザインマネージャー 公開版 v2.5</div></aside>`;
 }
 
 const state = {
@@ -180,7 +180,7 @@ function renderDashboard(){
     <div class="card"><div style="font-weight:700;margin-bottom:14px">担当者別件数</div>${staffSummary.map(s=>`<div class="list-item" style="display:flex;justify-content:space-between;align-items:center"><div style="font-weight:700">${esc(s.name)}</div><div>${s.count}件</div></div>`).join("")}</div>
   </div>`;
 }
-function statCard(title, value, sub){ return `<div class="card"><div class="stat-label">${title}</div><div class="stat-value">${esc(value)}</div><div class="stat-sub">${esc(sub)}</div></div>`; }
+function statCard(title, value, sub){ return `<div class="card stat-polish"><div class="stat-label" style="font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase">${title}</div><div class="stat-value" style="font-size:38px;font-weight:800;letter-spacing:-.03em">${esc(value)}</div><div class="stat-sub" style="margin-top:10px">${esc(sub)}</div></div>`; }
 
 function filteredOrders(){
   let list = state.orders.filter((o) => {
