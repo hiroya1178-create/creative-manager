@@ -1,28 +1,29 @@
-# Creative Manager Orders Edit V3.1
+# Creative Manager Public App
 
-GitHub にそのままアップロードできる 4ファイル版です。
+GitHub Pages でそのまま公開できる 4 ファイル版です。
 
-## 入っているファイル
+## ファイル構成
 - index.html
 - style.css
 - app.js
 - README.md
 
-## できること
-- 受注一覧の表示
-- 一覧からステータス変更
-- 詳細 / 編集ポップアップ
-- 担当者変更
-- 完了予定日変更
-- 通知文面プレビュー
-- 変更履歴
-- 複製 / 削除
-- 検索
-- 合計金額表示
+## 公開手順
+1. GitHub リポジトリに 4 ファイルをアップロード
+2. Settings → Pages
+3. Deploy from a branch
+4. Branch: main / Folder: /(root)
+5. Save
 
-## 使い方
-1. この4ファイルを GitHub のリポジトリにアップロード
-2. Vercel などに連携して公開
+## 今回入っている画面
+- ダッシュボード
+- 受注管理
+- スタッフ管理
+- テンプレート管理
+- 日程カレンダー
+- 外注管理
 
-## 補足
-この版は React ではなく、公開しやすいように HTML / CSS / JavaScript の静的構成で作っています。
+## メモ
+- フロントのみの静的アプリです
+- データ保存はブラウザのメモリ上のみです
+- ページ更新で初期データに戻ります
