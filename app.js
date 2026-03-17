@@ -25,6 +25,9 @@ let state = {
   staff: load("staff", initialStaff),
   templates: load("templates", initialTemplates),
   query: "",
+  assigneeFilter: "all",
+  statusFilter: "all",
+  sortMode: "dueAsc",
   selectedOrderId: null,
   createOpen: false,
   createErrors: {},
@@ -108,10 +111,38 @@ function renderDashboard(){
 }
 function renderOrders(){
   const q = state.query.toLowerCase();
-  const filtered = state.orders.filter(o => [o.id,o.projectName,o.client,o.assignee,o.status].join(" ").toLowerCase().includes(q));
+  let filtered = state.orders.filter(o => [o.id,o.projectName,o.client,o.assignee,o.status].join(" ").toLowerCase().includes(q));
+  if(state.assigneeFilter !== "all") filtered = filtered.filter(o => o.assignee === state.assigneeFilter);
+  if(state.statusFilter !== "all") filtered = filtered.filter(o => o.status === state.statusFilter);
+  filtered = [...filtered].sort((a,b) => {
+    if(state.sortMode === "dueAsc") return String(a.finishDate || "9999-99-99").localeCompare(String(b.finishDate || "9999-99-99"));
+    if(state.sortMode === "dueDesc") return String(b.finishDate || "0000-00-00").localeCompare(String(a.finishDate || "0000-00-00"));
+    if(state.sortMode === "amountDesc") return Number(b.amount || 0) - Number(a.amount || 0);
+    if(state.sortMode === "amountAsc") return Number(a.amount || 0) - Number(b.amount || 0);
+    return 0;
+  });
   const totalAmount = filtered.reduce((s,o)=>s+Number(o.amount||0),0);
   return `<div class="page-head"><div><div class="page-title">受注管理 V3.1</div><div class="page-sub">一覧ステータス変更・詳細編集・通知文面更新・履歴管理</div></div><div class="top-actions"><div class="card" style="padding:14px 18px">表示案件合計: <strong>${formatYen(totalAmount)}</strong></div><button class="btn primary" onclick="openCreate()">新規案件追加</button></div></div>
-  <div class="card"><div class="search-row"><input placeholder="案件名・顧客・担当者・ステータスで検索" value="${esc(state.query)}" oninput="state.query=this.value;render()"></div></div>
+  <div class="card">
+    <div class="search-row"><input placeholder="案件名・顧客・担当者・ステータスで検索" value="${esc(state.query)}" oninput="state.query=this.value;render()"></div>
+    <div style="display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px">
+      <select onchange="state.assigneeFilter=this.value;render()">
+        <option value="all" ${state.assigneeFilter==="all"?"selected":""}>担当者: すべて</option>
+        ${staffOptions.map(name=>`<option value="${name}" ${state.assigneeFilter===name?"selected":""}>${name}</option>`).join("")}
+      </select>
+      <select onchange="state.statusFilter=this.value;render()">
+        <option value="all" ${state.statusFilter==="all"?"selected":""}>ステータス: すべて</option>
+        ${["納期OK","納期NG","納品受信"].map(s=>`<option value="${s}" ${state.statusFilter===s?"selected":""}>${s}</option>`).join("")}
+      </select>
+      <select onchange="state.sortMode=this.value;render()">
+        <option value="dueAsc" ${state.sortMode==="dueAsc"?"selected":""}>納期が近い順</option>
+        <option value="dueDesc" ${state.sortMode==="dueDesc"?"selected":""}>納期が遅い順</option>
+        <option value="amountDesc" ${state.sortMode==="amountDesc"?"selected":""}>金額が高い順</option>
+        <option value="amountAsc" ${state.sortMode==="amountAsc"?"selected":""}>金額が低い順</option>
+      </select>
+      <button class="btn" onclick="state.query='';state.assigneeFilter='all';state.statusFilter='all';state.sortMode='dueAsc';render()">フィルター解除</button>
+    </div>
+  </div>
   <div class="table"><div class="table-head"><div>ID</div><div>案件</div><div>顧客</div><div>金額</div><div>担当</div><div>完了予定</div><div>ステータス</div><div>操作</div></div>
   ${filtered.length===0?`<div style="padding:50px;text-align:center;color:#94a3b8">一致する案件がありません</div>`:filtered.map(o=>`<div class="table-row"><div><strong>${o.id}</strong></div><div><strong>${esc(o.projectName)}</strong></div><div>${esc(o.client)}</div><div>${formatYen(o.amount)}</div><div>${esc(o.assignee)}</div><div>${esc(o.finishDate || "未設定")}</div><div><select class="${statusClass(o.status)}" onchange="updateStatus(${o.id}, this.value)">${["納期OK","納期NG","納品受信"].map(s=>`<option ${o.status===s?'selected':''}>${s}</option>`).join("")}</select></div><div><button class="btn" onclick="openOrder(${o.id})">開く</button></div></div>`).join("")}</div>`;
 }
