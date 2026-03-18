@@ -23,9 +23,9 @@ function categoryClass(category){ if(category==="ロゴデザイン") return "ca
 function outsourceStatusClass(status){ if(status==="依頼前") return "out-none"; if(status==="依頼済み") return "out-req"; if(status==="制作中") return "out-work"; if(status==="確認中") return "out-check"; return "ok"; }
 
 const baseOrders = [
-  { id: 1, projectName: "バナー制作", client: "A社", status: "納期OK", judge: "社内対応", amount: 50000, assignee: "田中", finishDate: "2026-03-25", history: [], notice: "" },
-  { id: 2, projectName: "LPデザイン", client: "B社", status: "納期NG", judge: "外注推奨", amount: 120000, assignee: "佐藤", finishDate: "2026-03-28", history: [], notice: "", outsourceStatus: "依頼済み", outsourceVendor: "外注デザイン社", outsourceMemo: "急ぎ案件", receivedDate: "" },
-  { id: 3, projectName: "SNSキャンペーン画像", client: "チャッピー株式会社", status: "納品受信", judge: "納品受信", amount: 330000, assignee: "高橋", finishDate: "2026-03-20", history: ["外注先より納品完了"], notice: "" },
+  { id: 1, projectName: "バナー制作", client: "A社", status: "納期OK", judge: "社内対応", amount: 50000, assignee: "田中", finishDate: "2026-03-25", notes: "初回制作。ロゴ位置は中央寄せ。", history: [], notice: "" },
+  { id: 2, projectName: "LPデザイン", client: "B社", status: "納期NG", judge: "外注推奨", amount: 120000, assignee: "佐藤", finishDate: "2026-03-28", notes: "訴求文言の再確認が必要。", history: [], notice: "", outsourceStatus: "依頼済み", outsourceVendor: "外注デザイン社", outsourceMemo: "急ぎ案件", receivedDate: "" },
+  { id: 3, projectName: "SNSキャンペーン画像", client: "チャッピー株式会社", status: "納品受信", judge: "納品受信", amount: 330000, assignee: "高橋", finishDate: "2026-03-20", notes: "納品済み。次回は同テイストで展開予定。", history: ["外注先より納品完了"], notice: "" },
 ];
 const initialOrders = baseOrders.map(o => ({ ...o, notice: buildNotice(o) }));
 
@@ -56,6 +56,7 @@ function buildSampleOrder(seed){
   const order = {
     id: Date.now() + seed,
     client, projectName, amount, assignee, finishDate, status, judge,
+    notes: "サンプル案件メモ",
     history: ["サンプル案件を追加しました"],
     outsourceStatus: judge === "外注推奨" ? randomPick(["依頼前","依頼済み","制作中"]) : "",
     outsourceVendor: judge === "外注推奨" ? randomPick(sampleVendors) : "",
@@ -109,7 +110,7 @@ const state = {
   createErrors: {},
   pdfLoading: false,
   prefillTemplateId: null,
-  createForm: { client:"", projectName:"", amount:"80000", assignee:staffOptions[0], finishDate:"2026-03-31", status:"納期OK", sourceFileName:"" },
+  createForm: { client:"", projectName:"", amount:"80000", assignee:staffOptions[0], finishDate:"2026-03-31", status:"納期OK", notes:"", sourceFileName:"" },
   calendarMonth: { year: 2026, month: 2 },
   selectedCalendarDate: null,
   calendarQuickEditId: null,
@@ -127,9 +128,9 @@ function openCreate(prefillTemplateId=null){
   state.createErrors = {};
   if(prefillTemplateId){
     const tpl = state.templates.find(t => t.id === prefillTemplateId);
-    state.createForm = { client:"", projectName:tpl?.title || "", amount:String(tpl?.price || 80000), assignee:staffOptions[0], finishDate:"2026-03-31", status:"納期OK", sourceFileName:"" };
+    state.createForm = { client:"", projectName:tpl?.title || "", amount:String(tpl?.price || 80000), assignee:staffOptions[0], finishDate:"2026-03-31", status:"納期OK", notes:"", sourceFileName:"" };
   } else {
-    state.createForm = { client:"", projectName:"", amount:"80000", assignee:staffOptions[0], finishDate:"2026-03-31", status:"納期OK", sourceFileName:"" };
+    state.createForm = { client:"", projectName:"", amount:"80000", assignee:staffOptions[0], finishDate:"2026-03-31", status:"納期OK", notes:"", sourceFileName:"" };
   }
   render();
 }
@@ -290,7 +291,7 @@ function renderOrders(){
     </div>
   </div>
   <div class="table"><div class="table-head"><div>ID</div><div>案件</div><div>顧客</div><div>金額</div><div>担当</div><div>完了予定</div><div>ステータス</div><div>操作</div></div>
-  ${orders.length===0?`<div style="padding:50px;text-align:center;color:#94a3b8">一致する案件がありません</div>`:orders.map(o=>`<div class="table-row"><div><strong>${o.id}</strong></div><div><strong>${esc(o.projectName)}</strong></div><div>${esc(o.client)}</div><div>${formatYen(o.amount)}</div><div>${esc(o.assignee)}</div><div>${esc(o.finishDate || "未設定")}</div><div><select class="${statusClass(o.status)}" onchange="updateStatus(${o.id}, this.value)">${["納期OK","納期NG","納品受信"].map(s=>`<option ${o.status===s?'selected':''}>${s}</option>`).join("")}</select></div><div><button class="btn" onclick="openOrder(${o.id})">開く</button></div></div>`).join("")}
+  ${orders.length===0?`<div style="padding:50px;text-align:center;color:#94a3b8">一致する案件がありません</div>`:orders.map(o=>`<div class="table-row"><div><strong>${o.id}</strong></div><div><strong>${esc(o.projectName)}</strong>${o.notes ? `<div class="help" style="margin-top:4px">メモあり</div>` : ""}</div><div>${esc(o.client)}</div><div>${formatYen(o.amount)}</div><div>${esc(o.assignee)}</div><div>${esc(o.finishDate || "未設定")}</div><div><select class="${statusClass(o.status)}" onchange="updateStatus(${o.id}, this.value)">${["納期OK","納期NG","納品受信"].map(s=>`<option ${o.status===s?'selected':''}>${s}</option>`).join("")}</select></div><div><button class="btn" onclick="openOrder(${o.id})">開く</button></div></div>`).join("")}
   </div>${renderOrderModal()}`;
 }
 function updateStatus(id,status){
@@ -312,9 +313,9 @@ function renderOrderModal(){
     <input value="${esc(order.amount)}" oninput="patchOrder('amount', this.value.replace(/[^0-9]/g,''))"><div style="height:8px"></div>
     <select onchange="patchOrder('assignee', this.value)">${staffOptions.map(n=>`<option ${order.assignee===n?'selected':''}>${n}</option>`).join("")}</select><div style="height:8px"></div>
     <input type="date" value="${esc(order.finishDate||"")}" oninput="patchOrder('finishDate', this.value)"><div style="height:8px"></div>
-    <select class="${statusClass(order.status)}" onchange="patchOrder('status', this.value)">${["納期OK","納期NG","納品受信"].map(s=>`<option ${order.status===s?'selected':''}>${s}</option>`).join("")}</select>
+    <select class="${statusClass(order.status)}" onchange="patchOrder('status', this.value)">${["納期OK","納期NG","納品受信"].map(s=>`<option ${order.status===s?'selected':''}>${s}</option>`).join("")}</select><div style="height:8px"></div><div><div class="help" style="margin-bottom:6px">案件メモ</div><textarea oninput="patchOrder('notes', this.value)">${esc(order.notes || "")}</textarea></div>
     <div class="top-actions" style="margin-top:16px"><button class="btn primary" onclick="saveOrder()">保存する</button><button class="btn" onclick="duplicateOrder()">複製する</button><button class="btn danger" onclick="deleteOrder()">削除する</button><button class="btn" onclick="closeOrder()">閉じる</button></div></div>
-  <div><div style="font-weight:700;margin-bottom:10px">通知文面プレビュー</div><div class="notice-box">${esc(buildNotice(order))}</div><div style="font-weight:700;margin:16px 0 10px">現在の判定</div><div class="badge ${judgeClass(statusToJudge(order.status))}">${statusToJudge(order.status)}</div></div>
+  <div><div style="font-weight:700;margin-bottom:10px">通知文面プレビュー</div><div class="notice-box">${esc(buildNotice(order))}</div><div style="font-weight:700;margin:16px 0 10px">案件メモ</div><div class="notice-box">${esc(order.notes || "メモなし")}</div><div style="font-weight:700;margin:16px 0 10px">現在の判定</div><div class="badge ${judgeClass(statusToJudge(order.status))}">${statusToJudge(order.status)}</div></div>
   <div><div style="font-weight:700;margin-bottom:10px">変更履歴</div><div class="history-box">${historyHtml}</div></div>
   </div></div></div>`;
 }
@@ -324,7 +325,10 @@ function saveOrder(){
     if(o.id!==state.selectedOrderId) return o;
     const next = {...o, judge: statusToJudge(o.status)};
     next.notice = buildNotice(next);
-    next.history = [...(o.history||[]), "案件情報を保存しました"];
+    const history = [...(o.history||[])];
+    history.push("案件情報を保存しました");
+    if ((o.notes || "") !== (next.notes || "")) history.push("案件メモを更新しました");
+    next.history = history;
     return next;
   });
   render();
@@ -549,6 +553,7 @@ function renderCreateModal(){
     <div><div class="help" style="margin-bottom:6px">完了予定日 *</div><input type="date" value="${esc(f.finishDate)}" oninput="patchCreate('finishDate', this.value)">${e.finishDate?`<div class="error">${esc(e.finishDate)}</div>`:""}</div>
     <div><div class="help" style="margin-bottom:6px">ステータス</div><select class="${statusClass(f.status)}" onchange="patchCreate('status', this.value)">${["納期OK","納期NG","納品受信"].map(s=>`<option ${f.status===s?'selected':''}>${s}</option>`).join("")}</select></div>
   </div>
+  <div style="margin-top:16px"><div class="help" style="margin-bottom:6px">案件メモ</div><textarea oninput="patchCreate('notes', this.value)">${esc(f.notes || "")}</textarea></div>
   <div class="notice-box" style="margin-top:16px"><div style="font-weight:700;margin-bottom:8px">通知文面プレビュー</div>${esc(buildNotice({...f, amount:Number(f.amount||0)}))}</div>
   <div class="top-actions" style="justify-content:space-between;margin-top:16px"><div class="help">* は必須項目です</div><div class="top-actions"><button class="btn" onclick="closeCreate()">キャンセル</button><button class="btn primary" onclick="createOrder()">追加する</button></div></div></div></div>`;
 }
@@ -566,7 +571,7 @@ function validateCreate(){
 function createOrder(){
   if(!validateCreate()){ render(); return; }
   const f = state.createForm;
-  const next = { id: Date.now(), client:f.client, projectName:f.projectName, amount:Number(f.amount||0), assignee:f.assignee, finishDate:f.finishDate, status:f.status, judge:statusToJudge(f.status), history:["新規案件を追加しました"], outsourceStatus:"依頼前" };
+  const next = { id: Date.now(), client:f.client, projectName:f.projectName, amount:Number(f.amount||0), assignee:f.assignee, finishDate:f.finishDate, status:f.status, judge:statusToJudge(f.status), notes:f.notes || "", history:["新規案件を追加しました"], outsourceStatus:"依頼前" };
   next.notice = buildNotice(next);
   state.orders = [next, ...state.orders];
   closeCreate();

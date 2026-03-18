@@ -50,3 +50,5 @@ textarea{min-height:110px;resize:vertical}
 .bar-fill.danger{background:linear-gradient(90deg,#fb7185,#e11d48)}
 .bar-fill.info{background:linear-gradient(90deg,#60a5fa,#2563eb)}
 .compact-note{font-size:12px;color:#64748b;margin-top:6px}
+
+.memo-box{border:1px solid #e2e8f0;background:#f8fafc;border-radius:16px;padding:14px;white-space:pre-wrap;min-height:88px}
