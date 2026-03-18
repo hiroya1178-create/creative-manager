@@ -60,6 +60,80 @@ function profitClass(value){
   return "alert-safe";
 }
 
+function getStaffLoad(name){
+  return state.orders
+    .filter(o => o.assignee === name && o.status !== "納品受信")
+    .reduce((sum, o) => sum + estimateHours(o), 0);
+}
+function inferProjectKeywords(projectName){
+  const text = String(projectName || "").toLowerCase();
+  return {
+    hasBanner: text.includes("バナー"),
+    hasLp: text.includes("lp"),
+    hasWeb: text.includes("web") || text.includes("サイト") || text.includes("ホームページ"),
+    hasLogo: text.includes("ロゴ"),
+    hasPackage: text.includes("パッケージ"),
+    hasSns: text.includes("sns") || text.includes("instagram"),
+    hasIllustration: text.includes("イラスト"),
+    hasCode: text.includes("コーディング"),
+  };
+}
+function getAssignmentSuggestion(orderLike){
+  const keys = inferProjectKeywords(orderLike.projectName || "");
+  const candidates = state.staff.map(member => {
+    let skillScore = 0;
+    const skills = (member.skills || []).join(" ").toLowerCase();
+
+    if(keys.hasBanner && skills.includes("バナー")) skillScore += 3;
+    if(keys.hasLp && skills.includes("lp")) skillScore += 3;
+    if(keys.hasWeb && (skills.includes("ui") || skills.includes("レスポンシブ"))) skillScore += 2;
+    if(keys.hasLogo && skills.includes("ロゴ")) skillScore += 3;
+    if(keys.hasPackage && skills.includes("パッケージ")) skillScore += 3;
+    if(keys.hasSns && (skills.includes("バナー") || skills.includes("ui"))) skillScore += 2;
+    if(keys.hasIllustration && skills.includes("イラスト")) skillScore += 3;
+    if(keys.hasCode && skills.includes("コーディング")) skillScore += 3;
+
+    if(String(member.role || "").includes("ディレクター")) skillScore += 1;
+    if(String(member.role || "").includes("デザイナー") && (keys.hasBanner || keys.hasLp || keys.hasWeb || keys.hasSns)) skillScore += 1;
+    if(String(member.role || "").includes("フロント") && keys.hasCode) skillScore += 2;
+
+    const load = getStaffLoad(member.name);
+    const loadPenalty = Math.round(load / 8);
+    const totalScore = skillScore * 10 - loadPenalty;
+
+    return { member, load, totalScore, skillScore };
+  }).sort((a,b)=>b.totalScore-a.totalScore || a.load-b.load || a.member.name.localeCompare(b.member.name));
+
+  const best = candidates[0];
+  if(!best){
+    return { name: "未提案", load: 0, reason: "候補スタッフがいません。" };
+  }
+
+  const reasons = [];
+  if(best.skillScore > 0) reasons.push("案件内容とスキルの相性が良い");
+  if(best.load <= 16) reasons.push("現在の想定工数が比較的低い");
+  if(String(best.member.role || "").includes("ディレクター")) reasons.push("進行調整もしやすい");
+  if(reasons.length === 0) reasons.push("現在の負荷が最も軽い候補");
+
+  return {
+    name: best.member.name,
+    load: best.load,
+    reason: reasons.join(" / "),
+  };
+}
+function applySuggestedAssigneeToCreate(){
+  const s = getAssignmentSuggestion(state.createForm);
+  state.createForm.assignee = s.name;
+  render();
+}
+function applySuggestedAssigneeToOrder(){
+  const order = state.orders.find(o => o.id === state.selectedOrderId);
+  if(!order) return;
+  const s = getAssignmentSuggestion(order);
+  state.orders = state.orders.map(o => o.id === state.selectedOrderId ? { ...o, assignee: s.name } : o);
+  render();
+}
+
 const baseOrders = [
   { id: 1, projectName: "バナー制作", client: "A社", status: "納期OK", judge: "社内対応", amount: 50000, assignee: "田中", finishDate: "2026-03-25", notes: "初回制作。ロゴ位置は中央寄せ。", history: [], notice: "" },
   { id: 2, projectName: "LPデザイン", client: "B社", status: "納期NG", judge: "外注推奨", amount: 120000, assignee: "佐藤", finishDate: "2026-03-28", notes: "訴求文言の再確認が必要。", history: [], notice: "", outsourceStatus: "依頼済み", outsourceVendor: "外注デザイン社", outsourceMemo: "急ぎ案件", receivedDate: "" },
@@ -227,7 +301,7 @@ function extractFieldsFromText(text){
 
 function SideNav({ currentPage, setCurrentPage }){
   const items = [["dashboard","ダッシュボード"],["orders","受注管理"],["notifications","通知履歴"],["customers","顧客管理"],["staff","スタッフ管理"],["templates","テンプレート管理"],["calendar","日程カレンダー"],["outsource","外注管理"]];
-  return `<aside class="sidebar"><div class="brand">デザインマネージャー</div><div class="brand-sub">クリエイティブ管理</div><div class="nav">${items.map(([k,l])=>`<button class="${currentPage===k?'active':''}" onclick="setPage('${k}')">${l}</button>`).join("")}</div><div class="version">デザインマネージャー 公開版 v2.4</div></aside>`;
+  return `<aside class="sidebar"><div class="brand">デザインマネージャー</div><div class="brand-sub">クリエイティブ管理</div><div class="nav">${items.map(([k,l])=>`<button class="${currentPage===k?'active':''}" onclick="setPage('${k}')">${l}</button>`).join("")}</div><div class="version">デザインマネージャー 公開版 v3.5.1</div></aside>`;
 }
 
 const state = {
@@ -613,6 +687,7 @@ function renderOrderModal(){
     <input value="${esc(order.client)}" oninput="patchOrder('client', this.value)"><div style="height:8px"></div>
     <input value="${esc(order.amount)}" oninput="patchOrder('amount', this.value.replace(/[^0-9]/g,''))"><div style="height:8px"></div>
     <select onchange="patchOrder('assignee', this.value)">${staffOptions.map(n=>`<option ${order.assignee===n?'selected':''}>${n}</option>`).join("")}</select><div style="height:8px"></div>
+    <div class="suggest-box">${(() => { const s = getAssignmentSuggestion(order); return `<div class="suggest-title">担当者アサイン提案</div><div class="suggest-name">${s.name}</div><div class="suggest-reason">理由: ${esc(s.reason)} / 現在負荷: ${s.load || 0}h</div><div style="margin-top:10px"><button class="btn soft" type="button" onclick="applySuggestedAssigneeToOrder()">この提案を反映</button></div>`; })()}</div><div style="height:8px"></div>
     <input type="date" value="${esc(order.finishDate||"")}" oninput="patchOrder('finishDate', this.value)"><div style="height:8px"></div>
     <select class="${statusClass(order.status)}" onchange="patchOrder('status', this.value)">${["納期OK","納期NG","納品受信"].map(s=>`<option ${order.status===s?'selected':''}>${s}</option>`).join("")}</select><div style="height:8px"></div><div><div class="help" style="margin-bottom:6px">案件メモ</div><textarea oninput="patchOrder('notes', this.value)">${esc(order.notes || "")}</textarea></div>
     <div class="top-actions" style="margin-top:16px"><button class="btn primary" onclick="saveOrder()">保存する</button><button class="btn" onclick="duplicateOrder()">複製する</button><button class="btn danger" onclick="deleteOrder()">削除する</button><button class="btn" onclick="closeOrder()">閉じる</button></div></div>
@@ -1005,6 +1080,7 @@ function renderCreateModal(){
     <div><div class="help" style="margin-bottom:6px">案件名 *</div><input value="${esc(f.projectName)}" oninput="patchCreate('projectName', this.value)">${e.projectName?`<div class="error">${esc(e.projectName)}</div>`:""}</div>
     <div><div class="help" style="margin-bottom:6px">金額 *</div><input inputmode="numeric" value="${esc(f.amount)}" oninput="patchCreate('amount', this.value.replace(/[^0-9]/g,''))">${e.amount?`<div class="error">${esc(e.amount)}</div>`:""}</div>
     <div><div class="help" style="margin-bottom:6px">担当者</div><select onchange="patchCreate('assignee', this.value)">${staffOptions.map(n=>`<option ${f.assignee===n?'selected':''}>${n}</option>`).join("")}</select></div>
+    <div class="suggest-box">${(() => { const s = getAssignmentSuggestion(f); return `<div class="suggest-title">担当者アサイン提案</div><div class="suggest-name">${s.name}</div><div class="suggest-reason">理由: ${esc(s.reason)} / 現在負荷: ${s.load || 0}h</div><div style="margin-top:10px"><button class="btn soft" type="button" onclick="applySuggestedAssigneeToCreate()">この提案を反映</button></div>`; })()}</div>
     <div><div class="help" style="margin-bottom:6px">完了予定日 *</div><input type="date" value="${esc(f.finishDate)}" oninput="patchCreate('finishDate', this.value)">${e.finishDate?`<div class="error">${esc(e.finishDate)}</div>`:""}</div>
     <div><div class="help" style="margin-bottom:6px">ステータス</div><select class="${statusClass(f.status)}" onchange="patchCreate('status', this.value)">${["納期OK","納期NG","納品受信"].map(s=>`<option ${f.status===s?'selected':''}>${s}</option>`).join("")}</select></div>
   </div>
