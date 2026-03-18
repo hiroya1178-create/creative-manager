@@ -319,7 +319,7 @@ function renderOrderModal(){
   <div><div style="font-weight:700;margin-bottom:10px">変更履歴</div><div class="history-box">${historyHtml}</div></div>
   </div></div></div>`;
 }
-function patchOrder(key,val){ state.orders = state.orders.map(o=>o.id===state.selectedOrderId?{...o,[key]:val}:o); render(); }
+function patchOrder(key,val){ state.orders = state.orders.map(o=>o.id===state.selectedOrderId?{...o,[key]:val}:o);  }
 function saveOrder(){
   state.orders = state.orders.map(o=>{
     if(o.id!==state.selectedOrderId) return o;
@@ -557,7 +557,7 @@ function renderCreateModal(){
   <div class="notice-box" style="margin-top:16px"><div style="font-weight:700;margin-bottom:8px">通知文面プレビュー</div>${esc(buildNotice({...f, amount:Number(f.amount||0)}))}</div>
   <div class="top-actions" style="justify-content:space-between;margin-top:16px"><div class="help">* は必須項目です</div><div class="top-actions"><button class="btn" onclick="closeCreate()">キャンセル</button><button class="btn primary" onclick="createOrder()">追加する</button></div></div></div></div>`;
 }
-function patchCreate(key,val){ state.createForm[key] = val; if(state.createErrors[key]) delete state.createErrors[key]; render(); }
+function patchCreate(key,val){ state.createForm[key] = val; if(state.createErrors[key]) delete state.createErrors[key];  }
 function validateCreate(){
   const e = {};
   const f = state.createForm;
