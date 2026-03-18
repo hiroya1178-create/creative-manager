@@ -115,18 +115,114 @@ function buildMonthCells(year, month){
   while(cells.length % 7 !== 0) cells.push(null);
   return cells;
 }
+function normalizeDateString(value){
+  if(!value) return "";
+  let v = String(value).trim();
+  let m = v.match(/(20\d{2})[\/\-.年]\s*(\d{1,2})[\/\-.月]\s*(\d{1,2})/);
+  if(m){
+    const y = m[1];
+    const mo = String(m[2]).padStart(2,"0");
+    const d = String(m[3]).padStart(2,"0");
+    return `${y}-${mo}-${d}`;
+  }
+  m = v.match(/(20\d{2})(\d{2})(\d{2})/);
+  if(m) return `${m[1]}-${m[2]}-${m[3]}`;
+  return "";
+}
 function extractFieldsFromText(text){
-  const cleaned = text.replace(/\s+/g, " ").trim();
+  const raw = String(text || "");
+  const cleaned = raw.replace(/[ \t]+/g, " ").trim();
+  const lines = raw
+    .split(/\r?\n/)
+    .map(s => s.replace(/\s+/g, " ").trim())
+    .filter(Boolean);
+
   let client = "", projectName = "", amount = "", finishDate = "";
-  const clientPatterns = [/(?:顧客名|クライアント名|発注者|御社名|会社名)\s*[:：]?\s*([^\n\r]{2,40})/i,/([^\s]{2,30}株式会社)/,/([^\s]{2,30}有限会社)/];
-  const projectPatterns = [/(?:案件名|件名|プロジェクト名|制作物|タイトル)\s*[:：]?\s*([^\n\r]{2,60})/i,/(?:依頼内容|内容)\s*[:：]?\s*([^\n\r]{2,60})/i];
-  const amountPatterns = [/(?:金額|予算|見積|見積額|請求額)\s*[:：]?\s*¥?\s*([0-9,]{3,})/i,/¥\s*([0-9,]{3,})/];
-  const datePatterns = [/(?:納期|完了予定日|納品日|希望納期)\s*[:：]?\s*(20[0-9]{2}[\/\-\.][0-9]{1,2}[\/\-\.][0-9]{1,2})/i,/(20[0-9]{2}[\/\-\.][0-9]{1,2}[\/\-\.][0-9]{1,2})/];
-  for(const p of clientPatterns){ const m = cleaned.match(p); if(m&&m[1]){ client=m[1].trim(); break; } }
-  for(const p of projectPatterns){ const m = cleaned.match(p); if(m&&m[1]){ projectName=m[1].trim(); break; } }
-  for(const p of amountPatterns){ const m = cleaned.match(p); if(m&&m[1]){ amount=m[1].replace(/,/g,""); break; } }
-  for(const p of datePatterns){ const m = cleaned.match(p); if(m&&m[1]){ finishDate=m[1].replace(/\./g,"-").replace(/\//g,"-"); break; } }
-  return { client, projectName, amount, finishDate };
+
+  const fieldLabels = {
+    client: ["顧客名","クライアント名","発注者","御社名","会社名","依頼主"],
+    project: ["案件名","件名","プロジェクト名","制作物","タイトル","依頼内容","内容"],
+    amount: ["金額","予算","見積","見積額","請求額","制作費"],
+    date: ["納期","完了予定日","納品日","希望納期","締切","提出日"]
+  };
+
+  function pickFromLines(labels){
+    for(const line of lines){
+      for(const label of labels){
+        const idx = line.indexOf(label);
+        if(idx >= 0){
+          let candidate = line.slice(idx + label.length).replace(/^[:：\-\s]+/, "").trim();
+          if(candidate) return candidate;
+        }
+      }
+    }
+    return "";
+  }
+
+  client = pickFromLines(fieldLabels.client);
+  projectName = pickFromLines(fieldLabels.project);
+  const amountLine = pickFromLines(fieldLabels.amount);
+  const dateLine = pickFromLines(fieldLabels.date);
+
+  if(amountLine){
+    const m = amountLine.match(/([0-9][0-9,]{2,})/);
+    if(m) amount = m[1].replace(/,/g,"");
+  }
+  if(dateLine){
+    finishDate = normalizeDateString(dateLine);
+  }
+
+  if(!client){
+    const clientPatterns = [
+      /(?:顧客名|クライアント名|発注者|御社名|会社名|依頼主)\s*[:：]?\s*([^\n\r]{2,40})/i,
+      /([^\s]{2,30}株式会社)/,
+      /([^\s]{2,30}有限会社)/,
+      /([^\s]{2,30}合同会社)/
+    ];
+    for(const p of clientPatterns){ const m = cleaned.match(p); if(m&&m[1]){ client=m[1].trim(); break; } }
+  }
+  if(!projectName){
+    const projectPatterns = [
+      /(?:案件名|件名|プロジェクト名|制作物|タイトル|依頼内容|内容)\s*[:：]?\s*([^\n\r]{2,60})/i
+    ];
+    for(const p of projectPatterns){ const m = cleaned.match(p); if(m&&m[1]){ projectName=m[1].trim(); break; } }
+  }
+  if(!amount){
+    const amountPatterns = [
+      /(?:金額|予算|見積|見積額|請求額|制作費)\s*[:：]?\s*¥?\s*([0-9,]{3,})/i,
+      /¥\s*([0-9,]{3,})/
+    ];
+    for(const p of amountPatterns){ const m = cleaned.match(p); if(m&&m[1]){ amount=m[1].replace(/,/g,""); break; } }
+  }
+  if(!finishDate){
+    const datePatterns = [
+      /(?:納期|完了予定日|納品日|希望納期|締切|提出日)\s*[:：]?\s*((?:20\d{2}[\/\-.年]\s*\d{1,2}[\/\-.月]\s*\d{1,2}))/i,
+      /((?:20\d{2}[\/\-.年]\s*\d{1,2}[\/\-.月]\s*\d{1,2}))/i,
+      /(20\d{2}\d{2}\d{2})/
+    ];
+    for(const p of datePatterns){ const m = cleaned.match(p); if(m&&m[1]){ finishDate=normalizeDateString(m[1]); break; } }
+  }
+
+  client = client.replace(/[|｜]/g, " ").trim();
+  projectName = projectName.replace(/[|｜]/g, " ").trim();
+  if(client.length > 40) client = client.slice(0, 40).trim();
+  if(projectName.length > 60) projectName = projectName.slice(0, 60).trim();
+
+  const filled = [client, projectName, amount, finishDate].filter(Boolean).length;
+  let status = "error";
+  let message = "読取できませんでした。手入力してください。";
+  if(filled >= 4){
+    status = "ok";
+    message = "PDF読取に成功しました。候補をフォームへ反映しています。";
+  }else if(filled >= 1){
+    status = "partial";
+    message = "一部だけ読取できました。足りない項目は手入力してください。";
+  }
+  return {
+    client, projectName, amount, finishDate,
+    status, message,
+    preview: lines.slice(0, 12).join("\n")
+  };
 }
 
 function SideNav({ currentPage, setCurrentPage }){
@@ -148,7 +244,9 @@ const state = {
   createErrors: {},
   pdfLoading: false,
   prefillTemplateId: null,
-  createForm: { client:"", projectName:"", amount:"80000", assignee:staffOptions[0], finishDate:"2026-03-31", status:"納期OK", notes:"", sourceFileName:"" },
+  createForm: { client:"", projectName:"", amount:"80000", assignee:staffOptions[0], finishDate:"2026-03-31", status:"納期OK", notes:"", sourceFileName:"", extractedText:"" },
+  pdfParseStatus: "",
+  pdfParseMessage: "",
   calendarMonth: { year: 2026, month: 2 },
   selectedCalendarDate: null,
   calendarQuickEditId: null,
@@ -303,9 +401,13 @@ function openCreate(prefillTemplateId=null){
   state.createErrors = {};
   if(prefillTemplateId){
     const tpl = state.templates.find(t => t.id === prefillTemplateId);
-    state.createForm = { client:"", projectName:tpl?.title || "", amount:String(tpl?.price || 80000), assignee:staffOptions[0], finishDate:"2026-03-31", status:"納期OK", notes:"", sourceFileName:"" };
+    state.createForm = { client:"", projectName:tpl?.title || "", amount:String(tpl?.price || 80000), assignee:staffOptions[0], finishDate:"2026-03-31", status:"納期OK", notes:"", sourceFileName:"", extractedText:"" };
+    state.pdfParseStatus = "";
+    state.pdfParseMessage = "";
   } else {
-    state.createForm = { client:"", projectName:"", amount:"80000", assignee:staffOptions[0], finishDate:"2026-03-31", status:"納期OK", notes:"", sourceFileName:"" };
+    state.createForm = { client:"", projectName:"", amount:"80000", assignee:staffOptions[0], finishDate:"2026-03-31", status:"納期OK", notes:"", sourceFileName:"", extractedText:"" };
+    state.pdfParseStatus = "";
+    state.pdfParseMessage = "";
   }
   render();
 }
@@ -859,33 +961,45 @@ function saveOutsource(){
 async function handlePdfUpload(event){
   const file = event.target.files && event.target.files[0];
   if(!file) return;
-  state.pdfLoading = true; state.createForm.sourceFileName = file.name; render();
+  state.pdfLoading = true;
+  state.pdfParseStatus = "";
+  state.pdfParseMessage = "";
+  state.createForm.sourceFileName = file.name;
+  state.createForm.extractedText = "";
+  render();
   try{
     if(!window.pdfjsLib) throw new Error("pdfjsLib not found");
     const buffer = await file.arrayBuffer();
     const pdf = await window.pdfjsLib.getDocument({ data: buffer }).promise;
     let text = "";
-    for(let p=1; p<=pdf.numPages; p++){
+    const maxPages = Math.min(pdf.numPages, 10);
+    for(let p=1; p<=maxPages; p++){
       const page = await pdf.getPage(p);
       const content = await page.getTextContent();
-      text += content.items.map(i=>i.str).join(" ") + "\n";
+      const pageText = content.items.map(i => i.str).join(" ");
+      text += pageText + "\n";
     }
     const fields = extractFieldsFromText(text);
     state.createForm.client = fields.client || state.createForm.client;
     state.createForm.projectName = fields.projectName || state.createForm.projectName;
     state.createForm.amount = fields.amount || state.createForm.amount;
     state.createForm.finishDate = fields.finishDate || state.createForm.finishDate;
+    state.createForm.extractedText = fields.preview || "";
+    state.pdfParseStatus = fields.status;
+    state.pdfParseMessage = fields.message;
   }catch(e){
-    alert("PDFの読み込みに失敗しました。文字が入ったPDFか確認してください。");
+    state.pdfParseStatus = "error";
+    state.pdfParseMessage = "PDFの読取に失敗しました。手入力で続けられます。";
   }finally{
-    state.pdfLoading = false; render();
+    state.pdfLoading = false;
+    render();
   }
 }
 function renderCreateModal(){
   if(!state.createOpen) return "";
   const f = state.createForm, e = state.createErrors;
   return `<div class="modal-backdrop" onclick="if(event.target===this) closeCreate()"><div class="modal" style="width:min(860px,100%)"><div style="display:flex;justify-content:space-between;gap:12px;align-items:flex-start;margin-bottom:16px"><div><h3 style="margin:0 0 6px">新規案件追加</h3><div class="help">顧客名と案件名を先に入れると進めやすいです。PDFを添付すると候補を自動入力します。</div></div><button class="btn" onclick="closeCreate()">閉じる</button></div>
-  <div class="upload-box"><div style="font-weight:700;margin-bottom:6px">PDF発注書を読み込む</div><div class="help">PDFの中の文字から、顧客名・案件名・金額・完了予定日の候補を自動入力します。</div><div style="margin-top:10px"><input type="file" accept="application/pdf" onchange="handlePdfUpload(event)"></div>${state.pdfLoading?`<div class="help" style="margin-top:8px">PDFを読み込み中...</div>`:""}${f.sourceFileName?`<div class="file-pill">${esc(f.sourceFileName)}</div>`:""}</div>
+  <div class="upload-box"><div style="font-weight:700;margin-bottom:6px">PDF発注書を読み込む</div><div class="help">PDFの中の文字から、顧客名・案件名・金額・完了予定日の候補を自動入力します。読めなくても手入力で続けられます。</div><div style="margin-top:10px"><input type="file" accept="application/pdf" onchange="handlePdfUpload(event)"></div>${state.pdfLoading?`<div class="help" style="margin-top:8px">PDFを読み込み中...</div>`:""}${f.sourceFileName?`<div class="file-pill">${esc(f.sourceFileName)}</div>`:""}${state.pdfParseMessage?`<div class="parse-status ${state.pdfParseStatus==='ok'?'parse-ok':state.pdfParseStatus==='partial'?'parse-partial':'parse-error'}">${esc(state.pdfParseMessage)}</div>`:""}${f.extractedText?`<div class="parse-preview">${esc(f.extractedText)}</div>`:""}</div>
   <div class="grid-2" style="margin-top:16px">
     <div><div class="help" style="margin-bottom:6px">顧客名 *</div><input value="${esc(f.client)}" oninput="patchCreate('client', this.value)">${e.client?`<div class="error">${esc(e.client)}</div>`:""}</div>
     <div><div class="help" style="margin-bottom:6px">案件名 *</div><input value="${esc(f.projectName)}" oninput="patchCreate('projectName', this.value)">${e.projectName?`<div class="error">${esc(e.projectName)}</div>`:""}</div>

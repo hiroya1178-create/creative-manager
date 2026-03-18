@@ -1,4 +1,4 @@
-# Creative Manager Public App v3.4
+# Creative Manager Public App v3.4.1
 
 最新版の公開用4ファイルです。
 
