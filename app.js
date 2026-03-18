@@ -162,6 +162,8 @@ const state = {
     { id: 2, time: "2026-03-18 09:10", type: "ステータス変更", target: "LPデザイン", message: "ステータスが納期NGに更新されました。" },
     { id: 3, time: "2026-03-18 09:20", type: "外注更新", target: "LPデザイン", message: "外注状況が依頼済みに更新されました。" },
   ],
+  notificationFilterType: "all",
+  notificationQuery: "",
 };
 
 
@@ -555,10 +557,18 @@ function renderNotifications(){
   const today = state.notifications.filter(n => n.time.startsWith("2026-03-18")).length;
   const statusCount = state.notifications.filter(n => n.type === "ステータス変更").length;
   const memoCount = state.notifications.filter(n => n.type === "メモ更新").length;
+
+  const filtered = state.notifications.filter(n => {
+    const typeMatch = state.notificationFilterType === "all" ? true : n.type === state.notificationFilterType;
+    const q = state.notificationQuery.toLowerCase();
+    const textMatch = [n.type, n.target, n.message, n.time].join(" ").toLowerCase().includes(q);
+    return typeMatch && textMatch;
+  });
+
   return `
   <div class="page-head">
     <div><div class="page-title">通知履歴</div><div class="page-sub">案件更新やステータス変更の履歴を確認</div></div>
-    <div class="top-actions"><div class="card" style="padding:14px 18px;font-weight:700;">通知件数: ${total}件</div></div>
+    <div class="top-actions"><div class="card" style="padding:14px 18px;font-weight:700;">通知件数: ${filtered.length}件</div></div>
   </div>
   <div class="stat-grid-4">
     ${statCard("総通知件数", total, "全履歴")}
@@ -568,7 +578,19 @@ function renderNotifications(){
   </div>
   <div class="card" style="margin-top:16px">
     <div style="font-weight:700;margin-bottom:14px">通知一覧</div>
-    ${state.notifications.length===0 ? `<div class="help">通知履歴はありません。</div>` : state.notifications.map(n => `
+    <div class="grid-3" style="grid-template-columns:1fr 1fr auto; gap:12px; margin-bottom:14px">
+      <input placeholder="対象名・内容・日時で検索" value="${esc(state.notificationQuery)}" oninput="state.notificationQuery=this.value;render()">
+      <select onchange="state.notificationFilterType=this.value;render()">
+        <option value="all" ${state.notificationFilterType==="all"?"selected":""}>種類: すべて</option>
+        <option value="案件登録" ${state.notificationFilterType==="案件登録"?"selected":""}>案件登録</option>
+        <option value="ステータス変更" ${state.notificationFilterType==="ステータス変更"?"selected":""}>ステータス変更</option>
+        <option value="メモ更新" ${state.notificationFilterType==="メモ更新"?"selected":""}>メモ更新</option>
+        <option value="外注更新" ${state.notificationFilterType==="外注更新"?"selected":""}>外注更新</option>
+        <option value="案件更新" ${state.notificationFilterType==="案件更新"?"selected":""}>案件更新</option>
+      </select>
+      <button class="btn" onclick="state.notificationQuery='';state.notificationFilterType='all';render()">絞り込み解除</button>
+    </div>
+    ${filtered.length===0 ? `<div class="help">一致する通知はありません。</div>` : filtered.map(n => `
       <div class="list-item">
         <div style="display:flex;justify-content:space-between;gap:12px;align-items:flex-start;flex-wrap:wrap">
           <div>
