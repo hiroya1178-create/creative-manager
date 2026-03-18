@@ -107,7 +107,7 @@ function extractFieldsFromText(text){
 }
 
 function SideNav({ currentPage, setCurrentPage }){
-  const items = [["dashboard","ダッシュボード"],["orders","受注管理"],["staff","スタッフ管理"],["templates","テンプレート管理"],["calendar","日程カレンダー"],["outsource","外注管理"]];
+  const items = [["dashboard","ダッシュボード"],["orders","受注管理"],["customers","顧客管理"],["staff","スタッフ管理"],["templates","テンプレート管理"],["calendar","日程カレンダー"],["outsource","外注管理"]];
   return `<aside class="sidebar"><div class="brand">デザインマネージャー</div><div class="brand-sub">クリエイティブ管理</div><div class="nav">${items.map(([k,l])=>`<button class="${currentPage===k?'active':''}" onclick="setPage('${k}')">${l}</button>`).join("")}</div><div class="version">デザインマネージャー 公開版 v2.4</div></aside>`;
 }
 
@@ -355,6 +355,77 @@ function duplicateOrder(){
 }
 function deleteOrder(){ state.orders = state.orders.filter(o=>o.id!==state.selectedOrderId); state.selectedOrderId = null; render(); }
 
+
+function renderCustomers(){
+  const map = new Map();
+  state.orders.forEach(o => {
+    const key = o.client || "未設定";
+    if(!map.has(key)){
+      map.set(key, { client:key, count:0, amount:0, active:0, lastDue:"", orders:[] });
+    }
+    const item = map.get(key);
+    item.count += 1;
+    item.amount += Number(o.amount || 0);
+    if(o.status !== "納品受信") item.active += 1;
+    if((o.finishDate || "") > (item.lastDue || "")) item.lastDue = o.finishDate || "";
+    item.orders.push(o);
+  });
+  const customers = [...map.values()].sort((a,b)=>b.amount-a.amount || b.count-a.count || a.client.localeCompare(b.client));
+  const totalCustomers = customers.length;
+  const topAmount = customers[0] ? customers[0].amount : 0;
+  const totalAmount = customers.reduce((s,c)=>s+c.amount,0);
+
+  return `
+  <div class="page-head">
+    <div><div class="page-title">顧客管理</div><div class="page-sub">顧客ごとの案件状況と累計受注を確認</div></div>
+    <div class="top-actions"><div class="card" style="padding:14px 18px;font-weight:700;">顧客数: ${totalCustomers}社</div></div>
+  </div>
+  <div class="stat-grid-4">
+    ${statCard("登録顧客数", totalCustomers, "取引先")}
+    ${statCard("累計受注総額", formatYen(totalAmount), "全顧客合計")}
+    ${statCard("進行中顧客数", customers.filter(c=>c.active>0).length, "未完了案件あり")}
+    ${statCard("最大顧客売上", formatYen(topAmount), "トップ顧客")}
+  </div>
+  <div class="grid-2" style="margin-top:16px">
+    <div class="card">
+      <div style="font-weight:700;margin-bottom:14px">顧客別ランキング</div>
+      ${customers.length===0 ? `<div class="help">顧客データがありません。</div>` : customers.map((c,i)=>`
+        <div class="list-item">
+          <div style="display:flex;justify-content:space-between;gap:12px;align-items:flex-start;flex-wrap:wrap">
+            <div>
+              <div style="font-weight:700">${i+1}. ${esc(c.client)}</div>
+              <div class="help" style="margin-top:6px">案件数: ${c.count}件 ・ 進行中: ${c.active}件 ・ 最終納期: ${esc(c.lastDue || "未設定")}</div>
+            </div>
+            <div style="font-weight:800">${formatYen(c.amount)}</div>
+          </div>
+        </div>
+      `).join("")}
+    </div>
+    <div class="card">
+      <div style="font-weight:700;margin-bottom:14px">顧客別案件一覧</div>
+      ${customers.length===0 ? `<div class="help">顧客データがありません。</div>` : customers.map(c=>`
+        <div class="list-item">
+          <div style="font-weight:700;margin-bottom:10px">${esc(c.client)}</div>
+          ${c.orders.slice().sort((a,b)=>String(a.finishDate||"").localeCompare(String(b.finishDate||""))).map(o=>{
+            return `<div class="detail-item" style="margin-bottom:8px">
+              <div style="display:flex;justify-content:space-between;gap:8px;align-items:flex-start;flex-wrap:wrap">
+                <div>
+                  <div style="font-weight:700">${esc(o.projectName)}</div>
+                  <div class="help" style="margin-top:4px">金額: ${formatYen(o.amount)} ・ 担当: ${esc(o.assignee)} ・ 納期: ${esc(o.finishDate || "未設定")}</div>
+                </div>
+                <div class="badges">
+                  <span class="badge ${statusClass(o.status)}">${esc(o.status)}</span>
+                  <span class="badge ${judgeClass(o.judge)}">${esc(o.judge)}</span>
+                </div>
+              </div>
+            </div>`;
+          }).join("")}
+        </div>
+      `).join("")}
+    </div>
+  </div>`;
+}
+
 function renderStaff(){
   return `<div class="page-head"><div><div class="page-title">スタッフ管理</div><div class="page-sub">担当者の役割と稼働状況</div></div><button class="btn primary" onclick="openStaffEditor()">スタッフ追加</button></div>
   <div class="staff-grid">${state.staff.map(member=>{ const load = state.orders.filter(o=>o.assignee===member.name && o.status!=="納品受信").reduce((sum,o)=>sum+Math.max(Math.round(Number(o.amount||0)/10000),4),0); const percent = Math.min(Math.round(load/40*100),100); return `<div class="card"><div style="display:flex;justify-content:space-between;gap:12px"><div><div style="font-size:18px;font-weight:800">${esc(member.name)}</div><div class="help" style="margin-top:4px">${esc(member.role)}</div></div><div class="badge ok">稼働中</div></div><div class="help" style="margin-top:14px">${esc(member.email)}</div><div style="margin-top:14px"><div style="display:flex;justify-content:space-between;font-size:12px;color:#64748b;margin-bottom:8px"><span>想定稼働</span><span>${load}時間</span></div><div class="progress"><div style="width:${percent}%"></div></div></div><div class="chips">${(member.skills||[]).map(s=>`<span class="chip">${esc(s)}</span>`).join("")}</div><div class="top-actions" style="margin-top:14px"><button class="btn" onclick="openStaffEditor(${member.id})">編集</button><button class="btn danger" onclick="deleteStaff(${member.id})">削除</button></div></div>`; }).join("")}</div>${renderStaffModal()}`;
@@ -595,6 +666,7 @@ function createOrder(){
 function renderPage(){
   if(state.currentPage==="dashboard") return renderDashboard();
   if(state.currentPage==="orders") return renderOrders();
+  if(state.currentPage==="customers") return renderCustomers();
   if(state.currentPage==="staff") return renderStaff();
   if(state.currentPage==="templates") return renderTemplates();
   if(state.currentPage==="calendar") return renderCalendar();
