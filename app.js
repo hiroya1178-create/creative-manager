@@ -37,6 +37,29 @@ function getDeadlineAlert(order){
   return { label: "余裕あり", cls: "alert-safe" };
 }
 
+function estimateHours(order){
+  const title = String(order.projectName || "");
+  const tpl = state.templates.find(t => title.includes(t.title) || t.title.includes(title));
+  if(tpl) return Number(tpl.hours || 0);
+  return Math.max(4, Math.round(Number(order.amount || 0) / 10000));
+}
+function estimateExternalCost(order){
+  if(order.judge === "外注推奨" || order.outsourceStatus){
+    return Math.round(Number(order.amount || 0) * 0.35);
+  }
+  return 0;
+}
+function estimateProfit(order){
+  const laborCost = estimateHours(order) * 2500;
+  const externalCost = estimateExternalCost(order);
+  return Number(order.amount || 0) - laborCost - externalCost;
+}
+function profitClass(value){
+  if(value < 30000) return "alert-danger";
+  if(value < 80000) return "alert-warn";
+  return "alert-safe";
+}
+
 const baseOrders = [
   { id: 1, projectName: "バナー制作", client: "A社", status: "納期OK", judge: "社内対応", amount: 50000, assignee: "田中", finishDate: "2026-03-25", notes: "初回制作。ロゴ位置は中央寄せ。", history: [], notice: "" },
   { id: 2, projectName: "LPデザイン", client: "B社", status: "納期NG", judge: "外注推奨", amount: 120000, assignee: "佐藤", finishDate: "2026-03-28", notes: "訴求文言の再確認が必要。", history: [], notice: "", outsourceStatus: "依頼済み", outsourceVendor: "外注デザイン社", outsourceMemo: "急ぎ案件", receivedDate: "" },
@@ -244,6 +267,28 @@ function renderDashboard(){
       ${barRow("納品受信", receivedCount, statusTotal, "info")}
       <div class="compact-note">案件全体の状態をひと目で把握できます。</div>
     </div>
+  </div>
+  <div class="metric-grid" style="margin-top:16px">
+    <div class="metric-box">
+      <div class="metric-label">推定総工数</div>
+      <div class="metric-value">${state.orders.reduce((s,o)=>s+estimateHours(o),0)}h</div>
+      <div class="metric-sub">テンプレート工数 + 金額ベース推定</div>
+    </div>
+    <div class="metric-box">
+      <div class="metric-label">進行中工数</div>
+      <div class="metric-value">${state.orders.filter(o=>o.status!=="納品受信").reduce((s,o)=>s+estimateHours(o),0)}h</div>
+      <div class="metric-sub">未完了案件の想定工数</div>
+    </div>
+    <div class="metric-box">
+      <div class="metric-label">推定総利益</div>
+      <div class="metric-value">${formatYen(state.orders.reduce((s,o)=>s+estimateProfit(o),0))}</div>
+      <div class="metric-sub">売上 - 人件費 - 外注費(推定)</div>
+    </div>
+    <div class="metric-box">
+      <div class="metric-label">外注想定コスト</div>
+      <div class="metric-value">${formatYen(state.orders.reduce((s,o)=>s+estimateExternalCost(o),0))}</div>
+      <div class="metric-sub">外注候補案件の推定費用</div>
+    </div>
   </div>`;
 }
 function statCard(title, value, sub){ return `<div class="card"><div class="stat-label">${title}</div><div class="stat-value">${esc(value)}</div><div class="stat-sub">${esc(sub)}</div></div>`; }
@@ -305,8 +350,8 @@ function renderOrders(){
       <button class="btn" onclick="state.query='';state.assigneeFilter='all';state.statusFilter='all';state.sortMode='dueAsc';render()">フィルター解除</button>
     </div>
   </div>
-  <div class="table"><div class="table-head" style="grid-template-columns:.6fr 1.4fr 1fr .9fr .9fr 1fr 1fr 1fr .9fr"><div>ID</div><div>案件</div><div>顧客</div><div>金額</div><div>担当</div><div>完了予定</div><div>締切アラート</div><div>ステータス</div><div>操作</div></div>
-  ${orders.length===0?`<div style="padding:50px;text-align:center;color:#94a3b8">一致する案件がありません</div>`:orders.map(o=>`<div class="table-row" style="grid-template-columns:.6fr 1.4fr 1fr .9fr .9fr 1fr 1fr 1fr .9fr"><div><strong>${o.id}</strong></div><div><strong>${esc(o.projectName)}</strong>${o.notes ? `<div class="help" style="margin-top:4px">メモあり</div>` : ""}</div><div>${esc(o.client)}</div><div>${formatYen(o.amount)}</div><div>${esc(o.assignee)}</div><div>${esc(o.finishDate || "未設定")}</div><div>${(() => { const a = getDeadlineAlert(o); return `<span class="alert-chip ${a.cls}">${a.label}</span>`; })()}</div><div><select class="${statusClass(o.status)}" onchange="updateStatus(${o.id}, this.value)">${["納期OK","納期NG","納品受信"].map(s=>`<option ${o.status===s?'selected':''}>${s}</option>`).join("")}</select></div><div><button class="btn" onclick="openOrder(${o.id})">開く</button></div></div>`).join("")}
+  <div class="table"><div class="table-head" style="grid-template-columns:.6fr 1.3fr 1fr .8fr .7fr .9fr .9fr 1fr 1fr .8fr"><div>ID</div><div>案件</div><div>顧客</div><div>金額</div><div>工数</div><div>利益</div><div>完了予定</div><div>締切アラート</div><div>ステータス</div><div>操作</div></div>
+  ${orders.length===0?`<div style="padding:50px;text-align:center;color:#94a3b8">一致する案件がありません</div>`:orders.map(o=>`<div class="table-row" style="grid-template-columns:.6fr 1.3fr 1fr .8fr .7fr .9fr .9fr 1fr 1fr .8fr"><div><strong>${o.id}</strong></div><div><strong>${esc(o.projectName)}</strong>${o.notes ? `<div class="help" style="margin-top:4px">メモあり</div>` : ""}</div><div>${esc(o.client)}</div><div>${formatYen(o.amount)}</div><div>${estimateHours(o)}h</div><div><span class="alert-chip ${profitClass(estimateProfit(o))}">${formatYen(estimateProfit(o))}</span></div><div>${esc(o.finishDate || "未設定")}</div><div>${(() => { const a = getDeadlineAlert(o); return `<span class="alert-chip ${a.cls}">${a.label}</span>`; })()}</div><div><select class="${statusClass(o.status)}" onchange="updateStatus(${o.id}, this.value)">${["納期OK","納期NG","納品受信"].map(s=>`<option ${o.status===s?'selected':''}>${s}</option>`).join("")}</select></div><div><button class="btn" onclick="openOrder(${o.id})">開く</button></div></div>`).join("")}
   </div>${renderOrderModal()}`;
 }
 function updateStatus(id,status){
@@ -330,7 +375,7 @@ function renderOrderModal(){
     <input type="date" value="${esc(order.finishDate||"")}" oninput="patchOrder('finishDate', this.value)"><div style="height:8px"></div>
     <select class="${statusClass(order.status)}" onchange="patchOrder('status', this.value)">${["納期OK","納期NG","納品受信"].map(s=>`<option ${order.status===s?'selected':''}>${s}</option>`).join("")}</select><div style="height:8px"></div><div><div class="help" style="margin-bottom:6px">案件メモ</div><textarea oninput="patchOrder('notes', this.value)">${esc(order.notes || "")}</textarea></div>
     <div class="top-actions" style="margin-top:16px"><button class="btn primary" onclick="saveOrder()">保存する</button><button class="btn" onclick="duplicateOrder()">複製する</button><button class="btn danger" onclick="deleteOrder()">削除する</button><button class="btn" onclick="closeOrder()">閉じる</button></div></div>
-  <div><div style="font-weight:700;margin-bottom:10px">通知文面プレビュー</div><div class="notice-box">${esc(buildNotice(order))}</div><div style="font-weight:700;margin:16px 0 10px">締切アラート</div><div>${(() => { const a = getDeadlineAlert(order); return `<span class="alert-chip ${a.cls}">${a.label}</span>`; })()}</div><div style="font-weight:700;margin:16px 0 10px">案件メモ</div><div class="notice-box">${esc(order.notes || "メモなし")}</div><div style="font-weight:700;margin:16px 0 10px">現在の判定</div><div class="badge ${judgeClass(statusToJudge(order.status))}">${statusToJudge(order.status)}</div></div>
+  <div><div style="font-weight:700;margin-bottom:10px">通知文面プレビュー</div><div class="notice-box">${esc(buildNotice(order))}</div><div style="font-weight:700;margin:16px 0 10px">工数 / 利益</div><div class="notice-box">推定工数: ${estimateHours(order)}h\n推定利益: ${formatYen(estimateProfit(order))}\n外注想定コスト: ${formatYen(estimateExternalCost(order))}</div><div style="font-weight:700;margin:16px 0 10px">締切アラート</div><div>${(() => { const a = getDeadlineAlert(order); return `<span class="alert-chip ${a.cls}">${a.label}</span>`; })()}</div><div style="font-weight:700;margin:16px 0 10px">案件メモ</div><div class="notice-box">${esc(order.notes || "メモなし")}</div><div style="font-weight:700;margin:16px 0 10px">現在の判定</div><div class="badge ${judgeClass(statusToJudge(order.status))}">${statusToJudge(order.status)}</div></div>
   <div><div style="font-weight:700;margin-bottom:10px">変更履歴</div><div class="history-box">${historyHtml}</div></div>
   </div></div></div>`;
 }
