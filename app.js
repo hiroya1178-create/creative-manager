@@ -130,7 +130,7 @@ function extractFieldsFromText(text){
 }
 
 function SideNav({ currentPage, setCurrentPage }){
-  const items = [["dashboard","ダッシュボード"],["orders","受注管理"],["customers","顧客管理"],["staff","スタッフ管理"],["templates","テンプレート管理"],["calendar","日程カレンダー"],["outsource","外注管理"]];
+  const items = [["dashboard","ダッシュボード"],["orders","受注管理"],["notifications","通知履歴"],["customers","顧客管理"],["staff","スタッフ管理"],["templates","テンプレート管理"],["calendar","日程カレンダー"],["outsource","外注管理"]];
   return `<aside class="sidebar"><div class="brand">デザインマネージャー</div><div class="brand-sub">クリエイティブ管理</div><div class="nav">${items.map(([k,l])=>`<button class="${currentPage===k?'active':''}" onclick="setPage('${k}')">${l}</button>`).join("")}</div><div class="version">デザインマネージャー 公開版 v2.4</div></aside>`;
 }
 
@@ -157,8 +157,27 @@ const state = {
   templateEditorOpen: false,
   editingTemplateId: null,
   outsourceEditorId: null,
+  notifications: [
+    { id: 1, time: "2026-03-18 09:00", type: "案件登録", target: "SNSキャンペーン画像", message: "新規案件が登録されました。" },
+    { id: 2, time: "2026-03-18 09:10", type: "ステータス変更", target: "LPデザイン", message: "ステータスが納期NGに更新されました。" },
+    { id: 3, time: "2026-03-18 09:20", type: "外注更新", target: "LPデザイン", message: "外注状況が依頼済みに更新されました。" },
+  ],
 };
 
+
+function logNotification(type, target, message){
+  const stamp = new Date();
+  const y = stamp.getFullYear();
+  const m = String(stamp.getMonth()+1).padStart(2, "0");
+  const d = String(stamp.getDate()).padStart(2, "0");
+  const hh = String(stamp.getHours()).padStart(2, "0");
+  const mm = String(stamp.getMinutes()).padStart(2, "0");
+  state.notifications = [{
+    id: Date.now(),
+    time: `${y}-${m}-${d} ${hh}:${mm}`,
+    type, target, message
+  }, ...state.notifications];
+}
 function setPage(page){ state.currentPage = page; render(); }
 function openCreate(prefillTemplateId=null){
   state.prefillTemplateId = prefillTemplateId;
@@ -319,6 +338,7 @@ function addSampleOrders(count){
     seed += 1;
   }
   state.orders = [...next, ...state.orders];
+  next.forEach(o => logNotification("案件登録", o.projectName, `サンプル案件を追加しました。`));
   render();
 }
 function exportCsv(){
@@ -358,6 +378,7 @@ function updateStatus(id,status){
   state.orders = state.orders.map(o=>{
     if(o.id!==id) return o;
     const updated = {...o,status,judge:statusToJudge(status)};
+    logNotification("ステータス変更", o.projectName, `ステータスが${status}に更新されました。`);
     return {...updated, notice:buildNotice(updated), history:[...(o.history||[]),`ステータス変更: ${status}`]};
   });
   render();
@@ -387,7 +408,11 @@ function saveOrder(){
     next.notice = buildNotice(next);
     const history = [...(o.history||[])];
     history.push("案件情報を保存しました");
-    if ((o.notes || "") !== (next.notes || "")) history.push("案件メモを更新しました");
+    if ((o.notes || "") !== (next.notes || "")) {
+      history.push("案件メモを更新しました");
+      logNotification("メモ更新", next.projectName, "案件メモが更新されました。");
+    }
+    logNotification("案件更新", next.projectName, "案件情報が保存されました。");
     next.history = history;
     return next;
   });
@@ -400,6 +425,49 @@ function duplicateOrder(){
 }
 function deleteOrder(){ state.orders = state.orders.filter(o=>o.id!==state.selectedOrderId); state.selectedOrderId = null; render(); }
 
+
+
+function notificationTypeClass(type){
+  if(type === "案件登録") return "alert-safe";
+  if(type === "ステータス変更") return "alert-warn";
+  if(type === "外注更新") return "alert-caution";
+  if(type === "メモ更新") return "alert-muted";
+  return "alert-safe";
+}
+function renderNotifications(){
+  const total = state.notifications.length;
+  const today = state.notifications.filter(n => n.time.startsWith("2026-03-18")).length;
+  const statusCount = state.notifications.filter(n => n.type === "ステータス変更").length;
+  const memoCount = state.notifications.filter(n => n.type === "メモ更新").length;
+  return `
+  <div class="page-head">
+    <div><div class="page-title">通知履歴</div><div class="page-sub">案件更新やステータス変更の履歴を確認</div></div>
+    <div class="top-actions"><div class="card" style="padding:14px 18px;font-weight:700;">通知件数: ${total}件</div></div>
+  </div>
+  <div class="stat-grid-4">
+    ${statCard("総通知件数", total, "全履歴")}
+    ${statCard("本日の通知", today, "当日分")}
+    ${statCard("ステータス変更", statusCount, "更新通知")}
+    ${statCard("メモ更新", memoCount, "編集通知")}
+  </div>
+  <div class="card" style="margin-top:16px">
+    <div style="font-weight:700;margin-bottom:14px">通知一覧</div>
+    ${state.notifications.length===0 ? `<div class="help">通知履歴はありません。</div>` : state.notifications.map(n => `
+      <div class="list-item">
+        <div style="display:flex;justify-content:space-between;gap:12px;align-items:flex-start;flex-wrap:wrap">
+          <div>
+            <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+              <span class="alert-chip ${notificationTypeClass(n.type)}">${esc(n.type)}</span>
+              <strong>${esc(n.target)}</strong>
+            </div>
+            <div style="margin-top:8px">${esc(n.message)}</div>
+            <div class="help" style="margin-top:6px">${esc(n.time)}</div>
+          </div>
+        </div>
+      </div>
+    `).join("")}
+  </div>`;
+}
 
 function renderCustomers(){
   const map = new Map();
@@ -597,6 +665,8 @@ function renderCalendarQuickEditModal(){
 function patchCalendar(key,val){ state.orders = state.orders.map(o=>o.id===state.calendarQuickEditId?{...o,[key]:val,judge:key==="status"?statusToJudge(val):o.judge}:o); render(); }
 function saveCalendar(){
   state.orders = state.orders.map(o=>o.id===state.calendarQuickEditId?{...o,notice:buildNotice(o),history:[...(o.history||[]),"カレンダーから案件を更新しました"]}:o);
+  const target = state.orders.find(o=>o.id===state.calendarQuickEditId);
+  if(target) logNotification("案件更新", target.projectName, "カレンダーから案件情報を更新しました。");
   closeCalendarQuickEdit();
 }
 
@@ -613,6 +683,7 @@ function markReceived(id){
   state.orders = state.orders.map(o=>{
     if(o.id!==id) return o;
     const next = {...o,status:"納品受信",judge:"納品受信",outsourceStatus:"納品受信",receivedDate:new Date().toISOString().slice(0,10),history:[...(o.history||[]),"外注案件を納品受信に変更"]};
+    logNotification("外注更新", o.projectName, "外注案件を納品受信に変更しました。");
     next.notice = buildNotice(next);
     return next;
   });
@@ -641,6 +712,7 @@ function saveOutsource(){
     if(next.outsourceStatus==="納品受信"){ next.status="納品受信"; next.judge="納品受信"; }
     next.notice = buildNotice(next);
     next.history = [...(next.history||[]),"外注情報を更新しました"];
+    logNotification("外注更新", next.projectName, "外注情報を更新しました。");
     return next;
   });
   closeOutsourceEditor();
@@ -705,12 +777,14 @@ function createOrder(){
   const next = { id: Date.now(), client:f.client, projectName:f.projectName, amount:Number(f.amount||0), assignee:f.assignee, finishDate:f.finishDate, status:f.status, judge:statusToJudge(f.status), notes:f.notes || "", history:["新規案件を追加しました"], outsourceStatus:"依頼前" };
   next.notice = buildNotice(next);
   state.orders = [next, ...state.orders];
+  logNotification("案件登録", next.projectName, "新規案件が登録されました。");
   closeCreate();
 }
 
 function renderPage(){
   if(state.currentPage==="dashboard") return renderDashboard();
   if(state.currentPage==="orders") return renderOrders();
+  if(state.currentPage==="notifications") return renderNotifications();
   if(state.currentPage==="customers") return renderCustomers();
   if(state.currentPage==="staff") return renderStaff();
   if(state.currentPage==="templates") return renderTemplates();
