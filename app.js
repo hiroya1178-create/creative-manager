@@ -178,6 +178,122 @@ function logNotification(type, target, message){
     type, target, message
   }, ...state.notifications];
 }
+
+function exportMonthlyReport(){
+  const currentMonth = "2026-03";
+  const monthlyOrders = state.orders.filter(o => String(o.finishDate || "").startsWith(currentMonth));
+  const totalCount = monthlyOrders.length;
+  const totalAmount = monthlyOrders.reduce((s,o)=>s+Number(o.amount||0),0);
+  const receivedCount = monthlyOrders.filter(o=>o.status==="納品受信").length;
+  const ngCount = monthlyOrders.filter(o=>o.status==="納期NG").length;
+  const outsourceCount = monthlyOrders.filter(o=>o.judge==="外注推奨" || o.outsourceStatus).length;
+  const totalProfit = monthlyOrders.reduce((s,o)=>s+estimateProfit(o),0);
+  const totalExternal = monthlyOrders.reduce((s,o)=>s+estimateExternalCost(o),0);
+
+  const customerMap = new Map();
+  monthlyOrders.forEach(o=>{
+    const key = o.client || "未設定";
+    if(!customerMap.has(key)) customerMap.set(key, { client:key, count:0, amount:0 });
+    const item = customerMap.get(key);
+    item.count += 1;
+    item.amount += Number(o.amount||0);
+  });
+  const customerRows = [...customerMap.values()].sort((a,b)=>b.amount-a.amount).slice(0,5);
+
+  const staffRows = state.staff.map(s=>({
+    name:s.name,
+    count: monthlyOrders.filter(o=>o.assignee===s.name).length,
+    hours: monthlyOrders.filter(o=>o.assignee===s.name).reduce((sum,o)=>sum+estimateHours(o),0),
+  })).sort((a,b)=>b.count-a.count || b.hours-a.hours);
+
+  const html = `<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<title>月次レポート_${currentMonth}</title>
+<style>
+body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:#f8fafc;color:#0f172a;margin:0;padding:32px}
+.wrap{max-width:1100px;margin:0 auto}
+h1{font-size:30px;margin:0 0 8px}
+.sub{color:#64748b;margin-bottom:24px}
+.grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:16px;margin-bottom:20px}
+.card{background:#fff;border:1px solid #e2e8f0;border-radius:20px;padding:18px}
+.label{font-size:12px;color:#64748b;margin-bottom:8px}
+.value{font-size:28px;font-weight:800}
+.section{background:#fff;border:1px solid #e2e8f0;border-radius:20px;padding:20px;margin-top:20px}
+h2{font-size:18px;margin:0 0 14px}
+.row{display:flex;justify-content:space-between;gap:12px;padding:12px 0;border-top:1px solid #eef2f7}
+.row:first-child{border-top:none;padding-top:0}
+.small{font-size:12px;color:#64748b}
+.badge{display:inline-flex;padding:5px 10px;border-radius:999px;background:#f5f3ff;color:#6d28d9;font-size:12px;font-weight:700}
+@media print{body{padding:0}.section,.card{break-inside:avoid}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>デザインマネージャー 月次レポート</h1>
+  <div class="sub">${currentMonth} の集計レポート</div>
+
+  <div class="grid">
+    <div class="card"><div class="label">受注件数</div><div class="value">${totalCount}</div></div>
+    <div class="card"><div class="label">受注総額</div><div class="value">${formatYen(totalAmount)}</div></div>
+    <div class="card"><div class="label">納品受信件数</div><div class="value">${receivedCount}</div></div>
+    <div class="card"><div class="label">納期NG件数</div><div class="value">${ngCount}</div></div>
+    <div class="card"><div class="label">外注案件数</div><div class="value">${outsourceCount}</div></div>
+    <div class="card"><div class="label">推定利益</div><div class="value">${formatYen(totalProfit)}</div></div>
+    <div class="card"><div class="label">外注想定コスト</div><div class="value">${formatYen(totalExternal)}</div></div>
+    <div class="card"><div class="label">推定総工数</div><div class="value">${monthlyOrders.reduce((s,o)=>s+estimateHours(o),0)}h</div></div>
+  </div>
+
+  <div class="section">
+    <h2>顧客別上位</h2>
+    ${customerRows.length===0 ? `<div class="small">データなし</div>` : customerRows.map((c,i)=>`
+      <div class="row">
+        <div>
+          <div><strong>${i+1}. ${esc(c.client)}</strong></div>
+          <div class="small">案件数: ${c.count}件</div>
+        </div>
+        <div><span class="badge">${formatYen(c.amount)}</span></div>
+      </div>
+    `).join("")}
+  </div>
+
+  <div class="section">
+    <h2>担当者別件数 / 工数</h2>
+    ${staffRows.map(s=>`
+      <div class="row">
+        <div>
+          <div><strong>${esc(s.name)}</strong></div>
+          <div class="small">案件数: ${s.count}件</div>
+        </div>
+        <div><span class="badge">${s.hours}h</span></div>
+      </div>
+    `).join("")}
+  </div>
+
+  <div class="section">
+    <h2>案件一覧</h2>
+    ${monthlyOrders.length===0 ? `<div class="small">データなし</div>` : monthlyOrders.sort((a,b)=>String(a.finishDate||"").localeCompare(String(b.finishDate||""))).map(o=>`
+      <div class="row">
+        <div>
+          <div><strong>${esc(o.projectName)}</strong></div>
+          <div class="small">${esc(o.client)} / ${esc(o.assignee)} / 納期: ${esc(o.finishDate || "未設定")}</div>
+        </div>
+        <div><span class="badge">${formatYen(o.amount)}</span></div>
+      </div>
+    `).join("")}
+  </div>
+</div>
+</body>
+</html>`;
+  const blob = new Blob([html], { type: "text/html;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `monthly_report_${currentMonth}.html`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
 function setPage(page){ state.currentPage = page; render(); }
 function openCreate(prefillTemplateId=null){
   state.prefillTemplateId = prefillTemplateId;
@@ -246,7 +362,7 @@ function renderDashboard(){
   })();
 
   return `
-  <div class="page-head"><div><div class="page-title">ダッシュボード</div><div class="page-sub">案件の概要と進捗状況</div></div><div class="card" style="padding:14px 18px;font-weight:700;color:#6d3df5;">チャッピー株式会社</div></div>
+  <div class="page-head"><div><div class="page-title">ダッシュボード</div><div class="page-sub">案件の概要と進捗状況</div></div><div class="top-actions"><button class="btn primary" onclick="exportMonthlyReport()">月次レポート出力</button><div class="card" style="padding:14px 18px;font-weight:700;color:#6d3df5;">チャッピー株式会社</div></div></div>
   <div class="stat-grid">
     ${statCard("すべてのプロジェクト", state.orders.length, "登録済み")}
     ${statCard("進行中", activeCount, "アクティブ")}
