@@ -301,7 +301,7 @@ function extractFieldsFromText(text){
 
 function SideNav({ currentPage, setCurrentPage }){
   const items = [["dashboard","ダッシュボード"],["orders","受注管理"],["notifications","通知履歴"],["customers","顧客管理"],["staff","スタッフ管理"],["templates","テンプレート管理"],["calendar","日程カレンダー"],["outsource","外注管理"]];
-  return `<aside class="sidebar"><div class="brand">デザインマネージャー</div><div class="brand-sub">クリエイティブ管理</div><div class="nav">${items.map(([k,l])=>`<button class="${currentPage===k?'active':''}" onclick="setPage('${k}')">${l}</button>`).join("")}</div><div class="version">デザインマネージャー 公開版 v3.5.1</div></aside>`;
+  return `<aside class="sidebar"><div class="brand">デザインマネージャー</div><div class="brand-sub">クリエイティブ管理</div><div class="nav">${items.map(([k,l])=>`<button class="${currentPage===k?'active':''}" onclick="setPage('${k}')">${l}</button>`).join("")}</div><div class="version">デザインマネージャー 公開版 v3.5.2.2</div></aside>`;
 }
 
 const state = {
@@ -319,6 +319,8 @@ const state = {
   pdfLoading: false,
   prefillTemplateId: null,
   createForm: { client:"", projectName:"", amount:"80000", assignee:staffOptions[0], finishDate:"2026-03-31", status:"納期OK", notes:"", sourceFileName:"", extractedText:"" },
+  pdfParseStatus: "",
+  pdfParseMessage: "",
   pdfParseStatus: "",
   pdfParseMessage: "",
   calendarMonth: { year: 2026, month: 2 },
@@ -475,11 +477,11 @@ function openCreate(prefillTemplateId=null){
   state.createErrors = {};
   if(prefillTemplateId){
     const tpl = state.templates.find(t => t.id === prefillTemplateId);
-    state.createForm = { client:"", projectName:tpl?.title || "", amount:String(tpl?.price || 80000), assignee:staffOptions[0], finishDate:"2026-03-31", status:"納期OK", notes:"", sourceFileName:"", extractedText:"" };
+    state.createForm = { client:"", projectName:tpl?.title || "", amount:String(tpl?.price || 80000), assignee:staffOptions[0], finishDate:"2026-03-31", status:"納期OK", notes:"", sourceFileName:"", extractedText:"" }; state.pdfParseStatus=""; state.pdfParseMessage="";
     state.pdfParseStatus = "";
     state.pdfParseMessage = "";
   } else {
-    state.createForm = { client:"", projectName:"", amount:"80000", assignee:staffOptions[0], finishDate:"2026-03-31", status:"納期OK", notes:"", sourceFileName:"", extractedText:"" };
+    state.createForm = { client:"", projectName:"", amount:"80000", assignee:staffOptions[0], finishDate:"2026-03-31", status:"納期OK", notes:"", sourceFileName:"", extractedText:"" }; state.pdfParseStatus=""; state.pdfParseMessage="";
     state.pdfParseStatus = "";
     state.pdfParseMessage = "";
   }
@@ -1044,6 +1046,7 @@ async function handlePdfUpload(event){
   render();
   try{
     if(!window.pdfjsLib) throw new Error("pdfjsLib not found");
+    window.pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.4.168/pdf.worker.min.js";
     const buffer = await file.arrayBuffer();
     const pdf = await window.pdfjsLib.getDocument({ data: buffer }).promise;
     let text = "";
