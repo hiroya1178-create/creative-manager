@@ -22,6 +22,21 @@ function judgeClass(judge){ if(judge==="社内対応") return "internal"; if(jud
 function categoryClass(category){ if(category==="ロゴデザイン") return "category logo"; if(category==="ウェブデザイン") return "category web"; if(category==="パッケージ") return "category package"; return "category ad"; }
 function outsourceStatusClass(status){ if(status==="依頼前") return "out-none"; if(status==="依頼済み") return "out-req"; if(status==="制作中") return "out-work"; if(status==="確認中") return "out-check"; return "ok"; }
 
+function getDeadlineAlert(order){
+  if(!order || !order.finishDate) return { label: "未設定", cls: "alert-muted" };
+  if(order.status === "納品受信") return { label: "完了", cls: "alert-safe" };
+  const today = new Date();
+  today.setHours(0,0,0,0);
+  const due = new Date(order.finishDate + "T00:00:00");
+  if(Number.isNaN(due.getTime())) return { label: "未設定", cls: "alert-muted" };
+  const diffDays = Math.ceil((due - today) / 86400000);
+  if(diffDays < 0) return { label: "期限超過", cls: "alert-danger" };
+  if(diffDays === 0) return { label: "今日まで", cls: "alert-danger" };
+  if(diffDays <= 3) return { label: "3日以内", cls: "alert-warn" };
+  if(diffDays <= 7) return { label: "7日以内", cls: "alert-caution" };
+  return { label: "余裕あり", cls: "alert-safe" };
+}
+
 const baseOrders = [
   { id: 1, projectName: "バナー制作", client: "A社", status: "納期OK", judge: "社内対応", amount: 50000, assignee: "田中", finishDate: "2026-03-25", notes: "初回制作。ロゴ位置は中央寄せ。", history: [], notice: "" },
   { id: 2, projectName: "LPデザイン", client: "B社", status: "納期NG", judge: "外注推奨", amount: 120000, assignee: "佐藤", finishDate: "2026-03-28", notes: "訴求文言の再確認が必要。", history: [], notice: "", outsourceStatus: "依頼済み", outsourceVendor: "外注デザイン社", outsourceMemo: "急ぎ案件", receivedDate: "" },
@@ -205,7 +220,7 @@ function renderDashboard(){
     ${statCard("納期近い案件", nearDueOrders.length, "未完了のみ")}
   </div>
   <div class="grid-3" style="margin-top:16px">
-    <div class="card"><div style="font-weight:700;margin-bottom:14px">最近の受注</div>${recentOrders.map(o=>`<div class="list-item"><div style="display:flex;justify-content:space-between;gap:12px;align-items:flex-start;flex-wrap:wrap"><div><div style="font-weight:700">${esc(o.client)} / ${esc(o.projectName)}</div><div class="help" style="margin-top:6px">担当: ${esc(o.assignee)} ・ 納期: ${esc(o.finishDate||"未設定")}</div></div><div class="badges"><span class="badge ${statusClass(o.status)}">${esc(o.status)}</span><span class="badge ${judgeClass(o.judge)}">${esc(o.judge)}</span></div></div></div>`).join("")}</div>
+    <div class="card"><div style="font-weight:700;margin-bottom:14px">最近の受注</div>${recentOrders.map(o=>`<div class="list-item"><div style="display:flex;justify-content:space-between;gap:12px;align-items:flex-start;flex-wrap:wrap"><div><div style="font-weight:700">${esc(o.client)} / ${esc(o.projectName)}</div><div class="help" style="margin-top:6px">担当: ${esc(o.assignee)} ・ 納期: ${esc(o.finishDate||"未設定")}</div></div><div class="badges">${(() => { const a = getDeadlineAlert(o); return `<span class="alert-chip ${a.cls}">${a.label}</span>`; })()}<span class="badge ${statusClass(o.status)}">${esc(o.status)}</span><span class="badge ${judgeClass(o.judge)}">${esc(o.judge)}</span></div></div></div>`).join("")}</div>
     <div class="card"><div style="font-weight:700;margin-bottom:14px">納期が近い案件</div>${nearDueOrders.length===0?`<div class="help">対象案件はありません。</div>`:nearDueOrders.map(o=>`<div class="list-item"><div style="font-weight:700">${esc(o.projectName)}</div><div class="help" style="margin-top:6px">${esc(o.client)} / ${esc(o.finishDate||"未設定")}</div></div>`).join("")}</div>
     <div class="card"><div style="font-weight:700;margin-bottom:14px">担当者別件数</div>${staffSummary.map(s=>`<div class="list-item" style="display:flex;justify-content:space-between;align-items:center"><div style="font-weight:700">${esc(s.name)}</div><div>${s.count}件</div></div>`).join("")}</div>
   </div>
@@ -290,8 +305,8 @@ function renderOrders(){
       <button class="btn" onclick="state.query='';state.assigneeFilter='all';state.statusFilter='all';state.sortMode='dueAsc';render()">フィルター解除</button>
     </div>
   </div>
-  <div class="table"><div class="table-head"><div>ID</div><div>案件</div><div>顧客</div><div>金額</div><div>担当</div><div>完了予定</div><div>ステータス</div><div>操作</div></div>
-  ${orders.length===0?`<div style="padding:50px;text-align:center;color:#94a3b8">一致する案件がありません</div>`:orders.map(o=>`<div class="table-row"><div><strong>${o.id}</strong></div><div><strong>${esc(o.projectName)}</strong>${o.notes ? `<div class="help" style="margin-top:4px">メモあり</div>` : ""}</div><div>${esc(o.client)}</div><div>${formatYen(o.amount)}</div><div>${esc(o.assignee)}</div><div>${esc(o.finishDate || "未設定")}</div><div><select class="${statusClass(o.status)}" onchange="updateStatus(${o.id}, this.value)">${["納期OK","納期NG","納品受信"].map(s=>`<option ${o.status===s?'selected':''}>${s}</option>`).join("")}</select></div><div><button class="btn" onclick="openOrder(${o.id})">開く</button></div></div>`).join("")}
+  <div class="table"><div class="table-head" style="grid-template-columns:.6fr 1.4fr 1fr .9fr .9fr 1fr 1fr 1fr .9fr"><div>ID</div><div>案件</div><div>顧客</div><div>金額</div><div>担当</div><div>完了予定</div><div>締切アラート</div><div>ステータス</div><div>操作</div></div>
+  ${orders.length===0?`<div style="padding:50px;text-align:center;color:#94a3b8">一致する案件がありません</div>`:orders.map(o=>`<div class="table-row" style="grid-template-columns:.6fr 1.4fr 1fr .9fr .9fr 1fr 1fr 1fr .9fr"><div><strong>${o.id}</strong></div><div><strong>${esc(o.projectName)}</strong>${o.notes ? `<div class="help" style="margin-top:4px">メモあり</div>` : ""}</div><div>${esc(o.client)}</div><div>${formatYen(o.amount)}</div><div>${esc(o.assignee)}</div><div>${esc(o.finishDate || "未設定")}</div><div>${(() => { const a = getDeadlineAlert(o); return `<span class="alert-chip ${a.cls}">${a.label}</span>`; })()}</div><div><select class="${statusClass(o.status)}" onchange="updateStatus(${o.id}, this.value)">${["納期OK","納期NG","納品受信"].map(s=>`<option ${o.status===s?'selected':''}>${s}</option>`).join("")}</select></div><div><button class="btn" onclick="openOrder(${o.id})">開く</button></div></div>`).join("")}
   </div>${renderOrderModal()}`;
 }
 function updateStatus(id,status){
@@ -315,7 +330,7 @@ function renderOrderModal(){
     <input type="date" value="${esc(order.finishDate||"")}" oninput="patchOrder('finishDate', this.value)"><div style="height:8px"></div>
     <select class="${statusClass(order.status)}" onchange="patchOrder('status', this.value)">${["納期OK","納期NG","納品受信"].map(s=>`<option ${order.status===s?'selected':''}>${s}</option>`).join("")}</select><div style="height:8px"></div><div><div class="help" style="margin-bottom:6px">案件メモ</div><textarea oninput="patchOrder('notes', this.value)">${esc(order.notes || "")}</textarea></div>
     <div class="top-actions" style="margin-top:16px"><button class="btn primary" onclick="saveOrder()">保存する</button><button class="btn" onclick="duplicateOrder()">複製する</button><button class="btn danger" onclick="deleteOrder()">削除する</button><button class="btn" onclick="closeOrder()">閉じる</button></div></div>
-  <div><div style="font-weight:700;margin-bottom:10px">通知文面プレビュー</div><div class="notice-box">${esc(buildNotice(order))}</div><div style="font-weight:700;margin:16px 0 10px">案件メモ</div><div class="notice-box">${esc(order.notes || "メモなし")}</div><div style="font-weight:700;margin:16px 0 10px">現在の判定</div><div class="badge ${judgeClass(statusToJudge(order.status))}">${statusToJudge(order.status)}</div></div>
+  <div><div style="font-weight:700;margin-bottom:10px">通知文面プレビュー</div><div class="notice-box">${esc(buildNotice(order))}</div><div style="font-weight:700;margin:16px 0 10px">締切アラート</div><div>${(() => { const a = getDeadlineAlert(order); return `<span class="alert-chip ${a.cls}">${a.label}</span>`; })()}</div><div style="font-weight:700;margin:16px 0 10px">案件メモ</div><div class="notice-box">${esc(order.notes || "メモなし")}</div><div style="font-weight:700;margin:16px 0 10px">現在の判定</div><div class="badge ${judgeClass(statusToJudge(order.status))}">${statusToJudge(order.status)}</div></div>
   <div><div style="font-weight:700;margin-bottom:10px">変更履歴</div><div class="history-box">${historyHtml}</div></div>
   </div></div></div>`;
 }
@@ -445,7 +460,7 @@ function renderCalendar(){
   const selectedOrders = state.selectedCalendarDate ? ordersForDate(new Date(state.selectedCalendarDate)) : [];
   return `<div class="page-head"><div><div class="page-title">日程カレンダー</div><div class="page-sub">完了予定日ベースの月間表示</div></div></div>
   <div class="calendar-wrap"><div class="card"><div class="calendar-header"><button class="btn" onclick="changeMonth(-1)">前月</button><div style="font-size:20px;font-weight:800">${year}年 ${month+1}月</div><button class="btn" onclick="changeMonth(1)">次月</button></div><div class="calendar-grid">${weekdays.map(d=>`<div class="weekday">${d}</div>`).join("")}${cells.map(cell=>{ if(!cell) return `<div class="day empty"></div>`; const dayOrders = ordersForDate(cell); return `<button class="day ${sameDay(cell,today)?'today':''}" onclick="selectCalendarDate('${cell.toISOString()}')"><div style="display:flex;justify-content:space-between;gap:8px;margin-bottom:8px"><span style="font-weight:700">${cell.getDate()}</span>${dayOrders.length?`<small class="chip" style="padding:4px 8px">${dayOrders.length}件</small>`:""}</div><div>${dayOrders.slice(0,3).map(o=>`<div class="detail-item ${statusClass(o.status)}" style="padding:6px 8px;font-size:11px;margin-bottom:6px"><div style="font-weight:700">${esc(o.projectName)}</div><div>${esc(o.assignee)}</div></div>`).join("")}</div></button>`; }).join("")}</div></div>
-  <div class="card"><div style="font-weight:700;margin-bottom:14px">日付クリック詳細</div>${!state.selectedCalendarDate?`<div class="help">カレンダーの日付をクリックすると、その日の案件が表示されます。</div>`: selectedOrders.length===0?`<div class="help">${new Date(state.selectedCalendarDate).toLocaleDateString('ja-JP')} の案件はありません。</div>`: selectedOrders.map(o=>`<div class="detail-item"><div style="display:flex;justify-content:space-between;gap:12px;align-items:flex-start;flex-wrap:wrap"><div><div style="font-weight:700">${esc(o.projectName)}</div><div class="help" style="margin-top:6px">顧客: ${esc(o.client)} / 担当: ${esc(o.assignee)}</div></div><button class="btn primary" onclick="openCalendarQuickEdit(${o.id})">この案件を編集</button></div><div class="badges" style="margin-top:10px"><span class="badge ${statusClass(o.status)}">${esc(o.status)}</span><span class="badge ${judgeClass(o.judge)}">${esc(o.judge)}</span></div></div>`).join("")}</div></div>${renderCalendarQuickEditModal()}`;
+  <div class="card"><div style="font-weight:700;margin-bottom:14px">日付クリック詳細</div>${!state.selectedCalendarDate?`<div class="help">カレンダーの日付をクリックすると、その日の案件が表示されます。</div>`: selectedOrders.length===0?`<div class="help">${new Date(state.selectedCalendarDate).toLocaleDateString('ja-JP')} の案件はありません。</div>`: selectedOrders.map(o=>`<div class="detail-item"><div style="display:flex;justify-content:space-between;gap:12px;align-items:flex-start;flex-wrap:wrap"><div><div style="font-weight:700">${esc(o.projectName)}</div><div class="help" style="margin-top:6px">顧客: ${esc(o.client)} / 担当: ${esc(o.assignee)}</div></div><button class="btn primary" onclick="openCalendarQuickEdit(${o.id})">この案件を編集</button></div><div class="badges" style="margin-top:10px">${(() => { const a = getDeadlineAlert(o); return `<span class="alert-chip ${a.cls}">${a.label}</span>`; })()}<span class="badge ${statusClass(o.status)}">${esc(o.status)}</span><span class="badge ${judgeClass(o.judge)}">${esc(o.judge)}</span></div></div>`).join("")}</div></div>${renderCalendarQuickEditModal()}`;
 }
 function changeMonth(delta){ let {year, month} = state.calendarMonth; month += delta; if(month<0){month=11;year-=1} if(month>11){month=0;year+=1} state.calendarMonth={year,month}; render(); }
 function selectCalendarDate(iso){ state.selectedCalendarDate = iso; render(); }
