@@ -38,6 +38,7 @@ function getDeadlineAlert(order){
 }
 
 function estimateHours(order){
+  if(order && Number(order.estimatedHours || 0) > 0) return Number(order.estimatedHours || 0);
   const title = String(order.projectName || "");
   const tpl = state.templates.find(t => title.includes(t.title) || t.title.includes(title));
   if(tpl) return Number(tpl.hours || 0);
@@ -61,9 +62,9 @@ function profitClass(value){
 }
 
 const baseOrders = [
-  { id: 1, projectName: "バナー制作", client: "A社", status: "納期OK", judge: "社内対応", amount: 50000, assignee: "田中", finishDate: "2026-03-25", notes: "初回制作。ロゴ位置は中央寄せ。", history: [], notice: "" },
-  { id: 2, projectName: "LPデザイン", client: "B社", status: "納期NG", judge: "外注推奨", amount: 120000, assignee: "佐藤", finishDate: "2026-03-28", notes: "訴求文言の再確認が必要。", history: [], notice: "", outsourceStatus: "依頼済み", outsourceVendor: "外注デザイン社", outsourceMemo: "急ぎ案件", receivedDate: "" },
-  { id: 3, projectName: "SNSキャンペーン画像", client: "チャッピー株式会社", status: "納品受信", judge: "納品受信", amount: 330000, assignee: "高橋", finishDate: "2026-03-20", notes: "納品済み。次回は同テイストで展開予定。", history: ["外注先より納品完了"], notice: "" },
+  { id: 1, projectName: "バナー制作", client: "A社", status: "納期OK", judge: "社内対応", amount: 50000, assignee: "田中", finishDate: "2026-03-25", estimatedHours: 12, notes: "初回制作。ロゴ位置は中央寄せ。", history: [], notice: "" },
+  { id: 2, projectName: "LPデザイン", client: "B社", status: "納期NG", judge: "外注推奨", amount: 120000, assignee: "佐藤", finishDate: "2026-03-28", estimatedHours: 12, notes: "訴求文言の再確認が必要。", history: [], notice: "", outsourceStatus: "依頼済み", outsourceVendor: "外注デザイン社", outsourceMemo: "急ぎ案件", receivedDate: "" },
+  { id: 3, projectName: "SNSキャンペーン画像", client: "チャッピー株式会社", status: "納品受信", judge: "納品受信", amount: 330000, assignee: "高橋", finishDate: "2026-03-20", estimatedHours: 33, notes: "納品済み。次回は同テイストで展開予定。", history: ["外注先より納品完了"], notice: "" },
 ];
 const initialOrders = baseOrders.map(o => ({ ...o, notice: buildNotice(o) }));
 
@@ -227,7 +228,7 @@ function extractFieldsFromText(text){
 
 function SideNav({ currentPage, setCurrentPage }){
   const items = [["dashboard","ダッシュボード"],["orders","受注管理"],["notifications","通知履歴"],["customers","顧客管理"],["staff","スタッフ管理"],["templates","テンプレート管理"],["calendar","日程カレンダー"],["outsource","外注管理"]];
-  return `<aside class="sidebar"><div class="brand">デザインマネージャー</div><div class="brand-sub">クリエイティブ管理</div><div class="nav">${items.map(([k,l])=>`<button class="${currentPage===k?'active':''}" onclick="setPage('${k}')">${l}</button>`).join("")}</div><div class="version">デザインマネージャー 公開版 v3.5.3</div></aside>`;
+  return `<aside class="sidebar"><div class="brand">デザインマネージャー</div><div class="brand-sub">クリエイティブ管理</div><div class="nav">${items.map(([k,l])=>`<button class="${currentPage===k?'active':''}" onclick="setPage('${k}')">${l}</button>`).join("")}</div><div class="version">デザインマネージャー 公開版 v3.5.4</div></aside>`;
 }
 
 const state = {
@@ -244,7 +245,7 @@ const state = {
   createErrors: {},
   pdfLoading: false,
   prefillTemplateId: null,
-  createForm: { client:"", projectName:"", amount:"80000", assignee:staffOptions[0], finishDate:"2026-03-31", status:"納期OK", notes:"", sourceFileName:"", extractedText:"" },
+  createForm: { client:"", projectName:"", amount:"80000", estimatedHours:"12", assignee:staffOptions[0], finishDate:"2026-03-31", status:"納期OK", notes:"", sourceFileName:"", extractedText:"" },
   pdfParseStatus: "",
   pdfParseMessage: "",
   calendarMonth: { year: 2026, month: 2 },
@@ -401,11 +402,11 @@ function openCreate(prefillTemplateId=null){
   state.createErrors = {};
   if(prefillTemplateId){
     const tpl = state.templates.find(t => t.id === prefillTemplateId);
-    state.createForm = { client:"", projectName:tpl?.title || "", amount:String(tpl?.price || 80000), assignee:staffOptions[0], finishDate:"2026-03-31", status:"納期OK", notes:"", sourceFileName:"", extractedText:"" };
+    state.createForm = { client:"", projectName:tpl?.title || "", amount:String(tpl?.price || 80000), estimatedHours:String(tpl?.hours || 12), assignee:staffOptions[0], finishDate:"2026-03-31", status:"納期OK", notes:"", sourceFileName:"", extractedText:"" };
     state.pdfParseStatus = "";
     state.pdfParseMessage = "";
   } else {
-    state.createForm = { client:"", projectName:"", amount:"80000", assignee:staffOptions[0], finishDate:"2026-03-31", status:"納期OK", notes:"", sourceFileName:"", extractedText:"" };
+    state.createForm = { client:"", projectName:"", amount:"80000", estimatedHours:"12", assignee:staffOptions[0], finishDate:"2026-03-31", status:"納期OK", notes:"", sourceFileName:"", extractedText:"" };
     state.pdfParseStatus = "";
     state.pdfParseMessage = "";
   }
@@ -612,11 +613,12 @@ function renderOrderModal(){
     <input value="${esc(order.projectName)}" oninput="patchOrder('projectName', this.value)"><div style="height:8px"></div>
     <input value="${esc(order.client)}" oninput="patchOrder('client', this.value)"><div style="height:8px"></div>
     <input value="${esc(order.amount)}" oninput="patchOrder('amount', this.value.replace(/[^0-9]/g,''))"><div style="height:8px"></div>
+    <div style="display:grid;grid-template-columns:1fr 140px;gap:8px"><input type="number" min="1" step="1" value="${esc(order.estimatedHours || estimateHours(order))}" oninput="patchOrder('estimatedHours', this.value.replace(/[^0-9]/g,''))"><select onchange="patchOrder('estimatedHours', this.value)"><option value="">選択</option>${["4","8","12","16","24","32","40","60"].map(h=>`<option value="${h}" ${String(order.estimatedHours || estimateHours(order))===h?'selected':''}>${h}h</option>`).join("")}</select></div><div style="height:8px"></div>
     <select onchange="patchOrder('assignee', this.value)">${staffOptions.map(n=>`<option ${order.assignee===n?'selected':''}>${n}</option>`).join("")}</select><div style="height:8px"></div>
     <input type="date" value="${esc(order.finishDate||"")}" oninput="patchOrder('finishDate', this.value)"><div style="height:8px"></div>
     <select class="${statusClass(order.status)}" onchange="patchOrder('status', this.value)">${["納期OK","納期NG","納品受信"].map(s=>`<option ${order.status===s?'selected':''}>${s}</option>`).join("")}</select><div style="height:8px"></div><div><div class="help" style="margin-bottom:6px">案件メモ</div><textarea oninput="patchOrder('notes', this.value)">${esc(order.notes || "")}</textarea></div>
     <div class="top-actions" style="margin-top:16px"><button class="btn primary" onclick="saveOrder()">保存する</button><button class="btn" onclick="duplicateOrder()">複製する</button><button class="btn danger" onclick="deleteOrder()">削除する</button><button class="btn" onclick="closeOrder()">閉じる</button></div></div>
-  <div><div style="font-weight:700;margin-bottom:10px">通知文面プレビュー</div><div class="notice-box">${esc(buildNotice(order))}</div><div style="font-weight:700;margin:16px 0 10px">工数 / 利益</div><div class="notice-box">推定工数: ${estimateHours(order)}h\n推定利益: ${formatYen(estimateProfit(order))}\n外注想定コスト: ${formatYen(estimateExternalCost(order))}</div><div style="font-weight:700;margin:16px 0 10px">締切アラート</div><div>${(() => { const a = getDeadlineAlert(order); return `<span class="alert-chip ${a.cls}">${a.label}</span>`; })()}</div><div style="font-weight:700;margin:16px 0 10px">案件メモ</div><div class="notice-box">${esc(order.notes || "メモなし")}</div><div style="font-weight:700;margin:16px 0 10px">現在の判定</div><div class="badge ${judgeClass(statusToJudge(order.status))}">${statusToJudge(order.status)}</div></div>
+  <div><div style="font-weight:700;margin-bottom:10px">通知文面プレビュー</div><div class="notice-box">${esc(buildNotice(order))}</div><div style="font-weight:700;margin:16px 0 10px">工数 / 利益</div><div class="notice-box">設定工数: ${estimateHours(order)}h\n推定利益: ${formatYen(estimateProfit(order))}\n外注想定コスト: ${formatYen(estimateExternalCost(order))}</div><div style="font-weight:700;margin:16px 0 10px">締切アラート</div><div>${(() => { const a = getDeadlineAlert(order); return `<span class="alert-chip ${a.cls}">${a.label}</span>`; })()}</div><div style="font-weight:700;margin:16px 0 10px">案件メモ</div><div class="notice-box">${esc(order.notes || "メモなし")}</div><div style="font-weight:700;margin:16px 0 10px">現在の判定</div><div class="badge ${judgeClass(statusToJudge(order.status))}">${statusToJudge(order.status)}</div></div>
   <div><div style="font-weight:700;margin-bottom:10px">変更履歴</div><div class="history-box">${historyHtml}</div></div>
   </div></div></div>`;
 }
@@ -803,6 +805,7 @@ function patchStaff(key,val){
     state._draftStaff = state._draftStaff || {name:"",role:"デザイナー",email:"",hoursPerDay:8,skills:[""]};
     state._draftStaff[key] = key==="hoursPerDay"?Number(val||0):val;
   }
+  render();
 }
 function patchStaffSkills(text){
   if(state.editingStaffId){
@@ -811,6 +814,7 @@ function patchStaffSkills(text){
     state._draftStaff = state._draftStaff || {name:"",role:"デザイナー",email:"",hoursPerDay:8,skills:[""]};
     state._draftStaff.skills = text.split("\n");
   }
+  render();
 }
 function saveStaff(){
   if(state.editingStaffId){
@@ -1002,6 +1006,7 @@ function renderCreateModal(){
     <div><div class="help" style="margin-bottom:6px">顧客名 *</div><input value="${esc(f.client)}" oninput="patchCreate('client', this.value)">${e.client?`<div class="error">${esc(e.client)}</div>`:""}</div>
     <div><div class="help" style="margin-bottom:6px">案件名 *</div><input value="${esc(f.projectName)}" oninput="patchCreate('projectName', this.value)">${e.projectName?`<div class="error">${esc(e.projectName)}</div>`:""}</div>
     <div><div class="help" style="margin-bottom:6px">金額 *</div><input inputmode="numeric" value="${esc(f.amount)}" oninput="patchCreate('amount', this.value.replace(/[^0-9]/g,''))">${e.amount?`<div class="error">${esc(e.amount)}</div>`:""}</div>
+    <div><div class="help" style="margin-bottom:6px">工数(h)</div><div style="display:grid;grid-template-columns:1fr 140px;gap:8px"><input type="number" min="1" step="1" value="${esc(f.estimatedHours || 12)}" oninput="patchCreate('estimatedHours', this.value.replace(/[^0-9]/g,''))"><select onchange="patchCreate('estimatedHours', this.value)"><option value="">選択</option>${["4","8","12","16","24","32","40","60"].map(h=>`<option value="${h}" ${String(f.estimatedHours||"")===h?'selected':''}>${h}h</option>`).join("")}</select></div></div>
     <div><div class="help" style="margin-bottom:6px">担当者</div><select onchange="patchCreate('assignee', this.value)">${staffOptions.map(n=>`<option ${f.assignee===n?'selected':''}>${n}</option>`).join("")}</select></div>
     <div><div class="help" style="margin-bottom:6px">完了予定日 *</div><input type="date" value="${esc(f.finishDate)}" oninput="patchCreate('finishDate', this.value)">${e.finishDate?`<div class="error">${esc(e.finishDate)}</div>`:""}</div>
     <div><div class="help" style="margin-bottom:6px">ステータス</div><select class="${statusClass(f.status)}" onchange="patchCreate('status', this.value)">${["納期OK","納期NG","納品受信"].map(s=>`<option ${f.status===s?'selected':''}>${s}</option>`).join("")}</select></div>
@@ -1024,7 +1029,7 @@ function validateCreate(){
 function createOrder(){
   if(!validateCreate()){ render(); return; }
   const f = state.createForm;
-  const next = { id: Date.now(), client:f.client, projectName:f.projectName, amount:Number(f.amount||0), assignee:f.assignee, finishDate:f.finishDate, status:f.status, judge:statusToJudge(f.status), notes:f.notes || "", history:["新規案件を追加しました"], outsourceStatus:"依頼前" };
+  const next = { id: Date.now(), client:f.client, projectName:f.projectName, amount:Number(f.amount||0), estimatedHours:Number(f.estimatedHours||0), assignee:f.assignee, finishDate:f.finishDate, status:f.status, judge:statusToJudge(f.status), notes:f.notes || "", history:["新規案件を追加しました"], outsourceStatus:"依頼前" };
   next.notice = buildNotice(next);
   state.orders = [next, ...state.orders];
   logNotification("案件登録", next.projectName, "新規案件が登録されました。");
